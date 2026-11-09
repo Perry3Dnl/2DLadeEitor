@@ -109,3 +109,70 @@ test("preview stays accurate after dragging and splitting",()=>{
  assert.equal(preview.depth,physical.depth);
  assert.equal(preview.radius,physical.radius);
 });
+
+
+test("dragging past another horizontal T-junction stops at the boundary, without reordering",()=>{
+ const s={...defaults,width:600,depth:400};
+ const bins=[
+ {id:"A",x:0,y:0,width:200,depth:249.3},
+ {id:"B",x:200,y:0,width:303.2,depth:329.5},
+ {id:"C",x:503.2,y:0,width:96.8,depth:329.5},
+ {id:"D",x:0,y:249.3,width:200,depth:150.7},
+ {id:"E",x:200,y:329.5,width:199.4,depth:70.5},
+ {id:"F",x:399.4,y:329.5,width:200.6,depth:70.5}
+ ];
+ assert.equal(validateLayout(bins,s),null);
+ const edges=findBoundaries(bins);
+ const left=edges.find(e=>e.axis==="horizontal"&&Math.abs(e.y-249.3)<.002);
+ const right=edges.find(e=>e.axis==="horizontal"&&Math.abs(e.y-329.5)<.002);
+ assert.ok(left);assert.ok(right);
+ const moved=moveBoundary(bins,left,500,s);
+ assert.equal(validateLayout(moved,s),null);
+ const leftAfter=findBoundaries(moved).find(e=>e.id===left.id);
+ assert.ok(leftAfter,"dragged handle remains continuous");
+ assert.ok(leftAfter.y<right.y,"divider must not cross next divider");
+ assert.equal(moved.length,6);
+ assert.equal(moved.find(b=>b.id==="B").depth,329.5);
+ const movedBack=moveBoundary(bins,right,-500,s);
+ assert.equal(validateLayout(movedBack,s),null);
+ assert.ok(findBoundaries(movedBack).find(e=>e.id===right.id).y>left.y);
+});
+test("crossing vertical edges at a sideways T junction is blocked",()=>{
+ const s={...defaults,width:600,depth:400};
+ const bins=[
+ {id:"A",x:0,y:0,width:200,depth:249.3},
+ {id:"B",x:200,y:0,width:303.2,depth:329.5},
+ {id:"C",x:503.2,y:0,width:96.8,depth:329.5},
+ {id:"D",x:0,y:249.3,width:200,depth:150.7},
+ {id:"E",x:200,y:329.5,width:199.4,depth:70.5},
+ {id:"F",x:399.4,y:329.5,width:200.6,depth:70.5}
+ ];
+ const edges=findBoundaries(bins);
+ const left=edges.find(e=>e.axis==="vertical"&&Math.abs(e.x-399.4)<.002);
+ const right=edges.find(e=>e.axis==="vertical"&&Math.abs(e.x-503.2)<.002);
+ assert.ok(left);assert.ok(right);
+ const moved=moveBoundary(bins,left,300,s);
+ assert.equal(validateLayout(moved,s),null);
+ const after=findBoundaries(moved).find(e=>e.id===left.id);
+ assert.ok(after);
+ assert.ok(after.x<right.x);
+});
+test("visible guide segments only follow actual adjoining bin edges",()=>{
+ const b=[
+ {id:"A",x:0,y:0,width:200,depth:249.3},
+ {id:"B",x:200,y:0,width:303.2,depth:329.5},
+ {id:"C",x:503.2,y:0,width:96.8,depth:329.5},
+ {id:"D",x:0,y:249.3,width:200,depth:150.7},
+ {id:"E",x:200,y:329.5,width:199.4,depth:70.5},
+ {id:"F",x:399.4,y:329.5,width:200.6,depth:70.5}
+ ];
+ for(const edge of findBoundaries(b)){
+  for(const segment of edge.segments){
+   assert.ok(segment.end>segment.start);
+   const mid=(segment.start+segment.end)/2;
+   const left=b.some(v=>edge.axis==="vertical"?Math.abs(v.x+v.width-edge.x)<.002&&v.y<=mid&&v.y+v.depth>=mid:Math.abs(v.y+v.depth-edge.y)<.002&&v.x<=mid&&v.x+v.width>=mid);
+   const right=b.some(v=>edge.axis==="vertical"?Math.abs(v.x-edge.x)<.002&&v.y<=mid&&v.y+v.depth>=mid:Math.abs(v.y-edge.y)<.002&&v.x<=mid&&v.x+v.width>=mid);
+   assert.ok(left&&right,`misleading guide ${edge.id} ${segment.start}-${segment.end}`);
+  }
+ }
+});
