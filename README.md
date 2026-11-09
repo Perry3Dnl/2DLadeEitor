@@ -8,9 +8,9 @@
 
 - **Lade op maat:** stel breedte, diepte en bakjehoogte in millimeters in.
 - **Nauwkeurige 2D-indeling:** zie echte bakjesafmetingen, wanddikte, ronde hoeken en vrije ruimtes direct mee veranderen met de instellingen.
-- **Vakken aanpassen:** selecteer een vak, controleer de randen en versleep de randen of hoekpunten met muis of vinger. Splits of combineer rechthoekige vakken.
+- **Vakken aanpassen:** selecteer een bakje, vul de gewenste breedte of diepte in, of versleep randen en hoekpunten met muis of vinger. Afmetingen die niet precies passen worden automatisch naar de dichtstbijzijnde geldige maat aangepast. Splits of combineer rechthoekige vakken.
 - **Printinstellingen:** stel wanddikte, bodemdikte, hoekafronding en pasruimte in.
-- **Alle STL-bakjes in één ZIP:** download één ZIP met voor ieder vak een afzonderlijk STL-bestand, direct te gebruiken in je slicer.
+- **STL per bakje of alles in één ZIP:** download losse bakjes één voor één via een overzichtelijke lijst of download alle STL-bestanden tegelijk.
 - **Ontwerp bewaren:** sla je huidige indeling op als JSON-bestand.
 - **Mobiel én desktop:** gebruik de ontwerper op het scherm dat je bij de hand hebt.
 
@@ -18,9 +18,9 @@
 
 1. Meet de binnenmaat van je lade en vul de breedte en diepte in.
 2. Begin met de automatisch voorgestelde indeling.
-3. Selecteer een vak. Versleep de turquoise randen of hoekpunten om de aangrenzende vakken aan te passen, of splits en combineer vakken.
+3. Selecteer een bakje en voer de breedte of diepte direct in. De editor kiest automatisch de dichtstbijzijnde maat die past. Je kunt ook de turquoise randen en hoekpunten verslepen of vakken splitsen en combineren.
 4. Stel de gewenste hoogte en printinstellingen in.
-5. Download alle bakjes als ZIP, pak de STL-bestanden uit en open ze in je slicer.
+5. Download één bakje als STL of download alle bakjes als ZIP. Open de bestanden in je slicer.
 
 > **Let op:** controleer de STL-bestanden en afmetingen altijd in je slicer voordat je gaat printen. De werkelijke passing hangt ook af van je printer, materiaal en kalibratie.
 

@@ -1,8 +1,9 @@
 "use client";
-import { useMemo,useState,useRef } from "react";
+import { useMemo,useState,useRef,useEffect } from "react";
 import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent} from "react";
 import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
-import {exportAllBins} from "@/lib/export-all";
+import {exportAllBins,exportOneBin} from "@/lib/export-all";
+import {fitBinSize,type SizingAxis} from "@/lib/size-bin";
 import {previewBin} from "@/lib/preview";
 import {getCellCorners,moveCellCorner,CornerName,getCellSides,moveCellSide,CellSideName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
@@ -19,6 +20,8 @@ export default function Designer(){
  const [message,setMessage]=useState("Selecteer een bakje om de afmetingen te bekijken.");
  const [mergeMode,setMergeMode]=useState(false);
  const [dragging,setDragging]=useState(false);
+ const [widthDraft,setWidthDraft]=useState("");
+ const [depthDraft,setDepthDraft]=useState("");
  const dragRef=useRef<{name:CornerName;cellId:string;startX:number;startY:number;bins:Bin[];pointerId:number}|null>(null);
  const sideDragRef=useRef<{side:CellSideName;cellId:string;start:number;bins:Bin[];pointerId:number}|null>(null);
  const svgRef=useRef<SVGSVGElement>(null);
@@ -95,6 +98,8 @@ export default function Designer(){
  }
  const current=bins.find(b=>b.id===selected[0])||bins[0];
  const shape=current?physicalBin(current,settings):null;
+ useEffect(()=>{setWidthDraft(shape?fmt(shape.width):"");},[current?.id,shape?.width]);
+ useEffect(()=>{setDepthDraft(shape?fmt(shape.depth):"");},[current?.id,shape?.depth]);
  const corners=useMemo(()=>getCellCorners(bins,current?.id||""),[bins,current?.id]);
  const sides=useMemo(()=>getCellSides(bins,current?.id||""),[bins,current?.id]);
  const physicalPreviews=useMemo(()=>bins.map(b=>previewBin(b,settings)),[bins,settings]);
@@ -124,15 +129,46 @@ export default function Designer(){
   setMergeMode(true);
   setMessage("Tik of klik op het tweede vak om samen te voegen.");
  }
+ function commitBinSize(axis:SizingAxis,draft:string){
+  const value=draft.trim().replace(",",".");
+  const reset=()=>{const currentShape=physicalBin(current,settings);
+   if(axis==="width")setWidthDraft(fmt(currentShape.width));
+   else setDepthDraft(fmt(currentShape.depth));
+  };
+  if(!/^\\d+(?:\\.\\d+)?$/.test(value)){
+   reset();setMessage("Vul een geldige maat in millimeters in, bijvoorbeeld 175,5.");return;
+  }
+  const requested=Number(value);
+  try{
+   const result=fitBinSize(bins,current.id,axis,requested,settings);
+   if(result.changed)setBins(result.bins);
+   const actual=fmt(result.actual);
+   if(axis==="width")setWidthDraft(actual);else setDepthDraft(actual);
+   const label=axis==="width"?"breedte":"diepte";
+   setMessage(result.adjusted?
+    `De gewenste ${label} van ${fmt(requested)} mm past niet precies. De dichtstbijzijnde geldige maat is ${actual} mm.`:
+    `De ${label} is ingesteld op ${actual} mm.`);
+  }catch(e){reset();setMessage(e instanceof Error?e.message:"De maat kon niet worden aangepast.");}
+ }
+ function downloadFile(buffer:ArrayBuffer,name:string,mime:string){
+  const url=URL.createObjectURL(new Blob([buffer],{type:mime}));
+  const link=document.createElement("a");link.href=url;link.download=name;
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+ }
+ function downloadOne(index:number){
+  if(error)return;
+  try{
+   const {name,data}=exportOneBin(bins,settings,index);
+   downloadFile(data,name,"model/stl");
+   setMessage(`${name} gedownload. Controleer het bestand in je slicer.`);
+  }catch(e){setMessage(e instanceof Error?e.message:"STL-download mislukt.");}
+ }
  function exportZIP(){
   if(error)return;
   try{
    const {zip,names}=exportAllBins(bins,settings);
-   const url=URL.createObjectURL(new Blob([zip],{type:"application/zip"}));
-   const link=document.createElement("a");
-   link.href=url;link.download="lade-bakjes.zip";
-   document.body.appendChild(link);link.click();link.remove();
-   setTimeout(()=>URL.revokeObjectURL(url),1000);
+   downloadFile(zip,"lade-bakjes.zip","application/zip");
    setMessage(`${names.length} losse STL-bestanden zitten in lade-bakjes.zip. Controleer ze in je slicer.`);
   }catch(e){
    setMessage(e instanceof Error?e.message:"ZIP-export mislukt.");
@@ -203,10 +239,46 @@ export default function Designer(){
   <div className="actions"><button onClick={()=>split("vertical")} disabled={!!error}>↔ Verticaal splitsen</button><button onClick={()=>split("horizontal")} disabled={!!error}>↕ Horizontaal splitsen</button><button onClick={merge} disabled={!!error}>{mergeMode?"Annuleer samenvoegen":"Vakken samenvoegen"}</button><button onClick={()=>{setBins(makeGrid(settings.width,settings.depth));setSelected(["bin-0"]);setMergeMode(false);setMessage("3 × 2 raster hersteld.")}} disabled={!!validateSettings(settings)}>Herstel 3 × 2</button></div>
   </section>
   <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Selecteer een vak en versleep de randen of hoekpunten. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
-  <section className="panel"><h2>Geselecteerd bakje</h2>{shape&&<><div className="metrics"><span>Breedte</span><strong>{fmt(shape.width)} mm</strong></div><div className="metrics"><span>Diepte</span><strong>{fmt(shape.depth)} mm</strong></div><div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div><div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div>
+  <section className="panel"><h2>Geselecteerd bakje {current?(`B${bins.findIndex(b=>b.id===current.id)+1}`):""}</h2>
+  {shape&&<><div className="fields size-fields">
+    <label className="field">Breedte (mm)
+      <input type="text" inputMode="decimal" aria-label="Breedte van geselecteerd bakje in millimeters"
+        value={widthDraft} onChange={e=>setWidthDraft(e.target.value)}
+        onBlur={()=>commitBinSize("width",widthDraft)}
+        onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>
+    </label>
+    <label className="field">Diepte (mm)
+      <input type="text" inputMode="decimal" aria-label="Diepte van geselecteerd bakje in millimeters"
+        value={depthDraft} onChange={e=>setDepthDraft(e.target.value)}
+        onBlur={()=>commitBinSize("depth",depthDraft)}
+        onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>
+    </label>
+  </div>
+  <p className="hint">Voer de buitenmaat van je bakje in. Als die niet precies past, gebruiken we automatisch de dichtstbijzijnde geldige maat.</p>
+  <div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div>
+  <div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div>
   <div className="metrics"><span>Hoekradius</span><strong>{fmt(shape.radius)} mm</strong></div>
-  <div className="metrics"><span>Binnenmaat</span><strong>{fmt(Math.max(0,shape.width-2*shape.wall))} × {fmt(Math.max(0,shape.depth-2*shape.wall))} mm</strong></div>
-  <button className="primary" onClick={exportZIP} disabled={!!error}>↓ Download alle bakjes als ZIP ({bins.length} STL)</button></>}<button style={{width:"100%"}} onClick={save} disabled={!!error}>Bewaar project als JSON</button><p className="alert" role="status">{error||message}</p></section></aside></div>
+  <div className="metrics"><span>Binnenmaat</span><strong>{fmt(Math.max(0,shape.width-2*shape.wall))} × {fmt(Math.max(0,shape.depth-2*shape.wall))} mm</strong></div></>}
+  <p className="alert" role="status">{error||message}</p>
+  </section>
+  <section className="panel"><h2>Bakjes downloaden</h2>
+    <p className="hint">Download één bakje tegelijk, handig op je telefoon, of download alles als ZIP.</p>
+    <div className="bin-download-list">
+      {bins.map((bin,index)=>{
+        const dimensions=physicalBin(bin,settings);
+        return <div className={current.id===bin.id?"bin-download-row is-selected":"bin-download-row"} key={bin.id}>
+          <div className="bin-download-info">
+            <strong>Bakje B{index+1}</strong>
+            <span>{fmt(dimensions.width)} × {fmt(dimensions.depth)} × {fmt(dimensions.height)} mm</span>
+          </div>
+          <button type="button" aria-label={`Download STL van bakje B${index+1}`}
+            onClick={()=>downloadOne(index)} disabled={!!error}>STL ↓</button>
+        </div>;
+      })}
+    </div>
+    <button className="primary" onClick={exportZIP} disabled={!!error}>↓ Download alle bakjes als ZIP ({bins.length} STL)</button>
+    <button style={{width:"100%"}} onClick={save} disabled={!!error}>Bewaar project als JSON</button>
+  </section></aside></div>
   <footer>Versie 0.1 · Build {process.env.NEXT_PUBLIC_COMMIT_SHA?.slice(0,8)||"lokaal"} · STL's controleren in de slicer vóór het printen.</footer>
  </main>
 }

@@ -33,3 +33,14 @@
 .selected-side-hit[aria-label*="left"],.selected-side-hit[aria-label*="right"]{cursor:col-resize}
 .selected-side-hit[aria-label*="top"],.selected-side-hit[aria-label*="bottom"]{cursor:row-resize}
 .selected-side-hit:hover,.selected-side-hit:focus-visible{stroke:rgba(71,229,202,.25);outline:none}
+
+/* Compact mobile-friendly STL download list and numeric selected-bin sizing. */
+.size-fields{margin:12px 0 6px}
+.size-fields input{font-size:16px;font-weight:650;min-height:44px}
+.bin-download-list{display:grid;gap:8px;margin:14px 0 18px}
+.bin-download-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #304e61;border-radius:10px;background:#0c1e2d}
+.bin-download-row.is-selected{border-color:#37b9a6;background:#11383e}
+.bin-download-info{display:grid;gap:4px;min-width:0;font-size:14px}
+.bin-download-info span{color:#a8c0cd;font-size:12px;overflow-wrap:anywhere}
+.bin-download-row button{flex:none;min-width:88px;min-height:44px;color:#08322e;background:#48d7bc;border-color:#48d7bc}
+@media(max-width:500px){.bin-download-row{padding:9px}.bin-download-info{font-size:13px}.bin-download-row button{min-width:80px}}
