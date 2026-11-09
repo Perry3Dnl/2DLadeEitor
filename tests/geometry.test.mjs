@@ -11,6 +11,7 @@ import {exportOneBin} from "../src/lib/export-all.ts";
 import {fitBinSize} from "../src/lib/size-bin.ts";
 import {parseSizeInput} from "../src/lib/parse-size.ts";
 import {roundedRectangleArea,estimateBinMaterial,estimateDrawerMaterial,PETG_DENSITY_G_CM3,MATERIAL_EUR_PER_GRAM} from "../src/lib/material-estimate.ts";
+import {estimateBinPrintMinutes,estimateDrawerPrintTime,REFERENCE_PRINT_MINUTES,REFERENCE_BIN,formatPrintMinutes} from "../src/lib/print-time.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -474,4 +475,52 @@ test("invalid PETG density or geometry never gives misleading cost values",()=>{
  assert.throws(()=>estimateBinMaterial({...shape,width:3}),/Ongeldige/);
  assert.throws(()=>roundedRectangleArea(50,30,40),/Ongeldige/);
  assert.throws(()=>estimateBinMaterial(shape,1.27,-.01),/Ongeldige/);
+});
+
+test("print time calibration matches known 200x200x55 PETG bin",()=>{
+ assert.equal(REFERENCE_PRINT_MINUTES,390);
+ assert.ok(Math.abs(estimateBinPrintMinutes(REFERENCE_BIN)-390)<1e-10);
+ assert.equal(formatPrintMinutes(390),"6u 30m");
+});
+test("rough duration scales with actual solid printable geometry",()=>{
+ const small=estimateBinPrintMinutes({...REFERENCE_BIN,width:100});
+ const large=estimateBinPrintMinutes({...REFERENCE_BIN,width:250});
+ const taller=estimateBinPrintMinutes({...REFERENCE_BIN,height:75});
+ const thick=estimateBinPrintMinutes({...REFERENCE_BIN,wall:3});
+ assert.ok(small>0&&small<390);
+ assert.ok(large>390&&taller>390&&thick>390);
+ const half=estimateBinPrintMinutes({...REFERENCE_BIN,width:100,depth:100});
+ assert.ok(half<small);
+});
+test("full drawer time is sum of per-bin estimates and updates after sizing, splitting, merging",()=>{
+ const grid=makeGrid(600,400);
+ const original=estimateDrawerPrintTime(grid,defaults);
+ assert.equal(original.items.length,6);
+ assert.ok(Math.abs(original.minutes-original.items.reduce((a,b)=>a+b,0))<1e-10);
+ assert.ok(original.minutes>0);
+ assert.ok(original.minutes>36*60&&original.minutes<42*60);
+ const resized=fitBinSize(grid,grid[0].id,"width",175.5,defaults).bins;
+ assert.notEqual(estimateDrawerPrintTime(resized,defaults).minutes,original.minutes);
+ const split=splitBin(grid,grid[0].id,"vertical");
+ assert.ok(split);
+ assert.equal(estimateDrawerPrintTime(split,defaults).items.length,7);
+ const merged=mergeBins(grid,grid[0].id,grid[1].id);
+ assert.ok(merged);
+ assert.equal(estimateDrawerPrintTime(merged,defaults).items.length,5);
+});
+test("print time doesn't change with PETG density or price, unlike weight/cost",()=>{
+ const grid=makeGrid(600,400);
+ const before=estimateDrawerPrintTime(grid,defaults);
+ const light=estimateDrawerMaterial(grid,defaults,1.20);
+ const heavy=estimateDrawerMaterial(grid,defaults,1.35);
+ assert.notEqual(light.grams,heavy.grams);
+ assert.equal(estimateDrawerPrintTime(grid,defaults).minutes,before.minutes);
+});
+test("duration formatting rounds once, retains hours beyond a day and rejects invalids",()=>{
+ assert.equal(formatPrintMinutes(0),"0m");
+ assert.equal(formatPrintMinutes(4.6),"5m");
+ assert.equal(formatPrintMinutes(59.5),"1u 00m");
+ assert.equal(formatPrintMinutes(38*60+38),"38u 38m");
+ assert.throws(()=>formatPrintMinutes(Number.NaN),/Ongeldige/);
+ assert.throws(()=>formatPrintMinutes(-1),/Ongeldige/);
 });
