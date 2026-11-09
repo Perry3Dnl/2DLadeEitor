@@ -5,9 +5,12 @@ import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSe
 import {exportAllBins,exportOneBin} from "@/lib/export-all";
 import {fitBinSize,type SizingAxis} from "@/lib/size-bin";
 import {parseSizeInput} from "@/lib/parse-size";
+import {estimateDrawerMaterial,PETG_DENSITY_G_CM3,MATERIAL_EUR_PER_GRAM} from "@/lib/material-estimate";
 import {previewBin} from "@/lib/preview";
 import {getCellCorners,moveCellCorner,CornerName,getCellSides,moveCellSide,CellSideName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
+const euro=(value:number)=>new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(value);
+const grams=(value:number)=>new Intl.NumberFormat("nl-NL",{minimumFractionDigits:1,maximumFractionDigits:1}).format(value);
 const fields:{key:keyof Settings;label:string;step:number}[]=[
  {key:"width",label:"Ladebreedte",step:1},{key:"depth",label:"Ladediepte",step:1},
  {key:"height",label:"Bakjehoogte",step:1},{key:"wall",label:"Wanddikte",step:.1},
@@ -16,6 +19,7 @@ const fields:{key:keyof Settings;label:string;step:number}[]=[
 ];
 export default function Designer(){
  const [settings,setSettings]=useState<Settings>(defaults);
+ const [petgDensity,setPetgDensity]=useState(PETG_DENSITY_G_CM3);
  const [bins,setBins]=useState<Bin[]>(()=>makeGrid(defaults.width,defaults.depth));
  const [selected,setSelected]=useState<string[]>(["bin-0"]);
  const [message,setMessage]=useState("Selecteer een bakje om de afmetingen te bekijken.");
@@ -29,6 +33,12 @@ export default function Designer(){
  const sideDragRef=useRef<{side:CellSideName;cellId:string;start:number;bins:Bin[];pointerId:number}|null>(null);
  const svgRef=useRef<SVGSVGElement>(null);
  const error=validateSettings(settings)||validateLayout(bins,settings);
+ const densityError=!Number.isFinite(petgDensity)||petgDensity<=0?"Voer een geldige PETG-dichtheid boven 0 g/cm³ in.":null;
+ const estimate=useMemo(()=>{
+  if(error||densityError)return null;
+  try{return estimateDrawerMaterial(bins,settings,petgDensity);}
+  catch{return null;}
+ },[bins,settings,petgDensity,error,densityError]);
  function pointMm(e:ReactPointerEvent<SVGCircleElement|SVGLineElement>){
   const matrix=svgRef.current?.getScreenCTM();
   if(!matrix)return null;
@@ -273,6 +283,23 @@ export default function Designer(){
   <div className="metrics"><span>Binnenmaat</span><strong>{fmt(Math.max(0,shape.width-2*shape.wall))} × {fmt(Math.max(0,shape.depth-2*shape.wall))} mm</strong></div></>}
   <p className="alert" role="status">{error||message}</p>
   </section>
+  <section className="panel"><h2>Materiaal & kosten · PETG</h2>
+    <div className="fields">
+      <label className="field">PETG-dichtheid (g/cm³)
+        <input type="number" min="0.1" step="0.01" value={Number.isFinite(petgDensity)?petgDensity:""}
+          onChange={e=>setPetgDensity(e.target.valueAsNumber)} />
+      </label>
+      <div className="field">Prijs per gram
+        <div className="material-fixed-price">{euro(MATERIAL_EUR_PER_GRAM)} / g</div>
+      </div>
+    </div>
+    {estimate?<div className="material-total" aria-live="polite">
+      <span>Totale geschatte materiaalkosten</span>
+      <strong>{euro(estimate.euros)}</strong>
+      <span>{grams(estimate.grams)} g PETG · {grams(estimate.volumeCm3)} cm³ · {bins.length} bakjes</span>
+    </div>:<p className="validation-error" role="status">{densityError||error||"Kan de materiaalraming niet berekenen."}</p>}
+    <p className="hint">Berekend als massieve bodem en wanden: buitenvolume minus de open binnenruimte, inclusief hoekafronding. Dit is een schatting op basis van de geometrie, niet het exacte slicerverbruik. Infill, support en printverlies zijn niet meegerekend.</p>
+  </section>
   <section className="panel"><h2>Bakjes downloaden</h2>
     <p className="hint">Download één bakje tegelijk, handig op je telefoon, of download alles als ZIP.</p>
     <div className="bin-download-list">
@@ -282,6 +309,7 @@ export default function Designer(){
           <div className="bin-download-info">
             <strong>Bakje B{index+1}</strong>
             <span>{fmt(dimensions.width)} × {fmt(dimensions.depth)} × {fmt(dimensions.height)} mm</span>
+            {estimate?.items[index]&&<span className="material-bin-cost">{grams(estimate.items[index].grams)} g PETG · {euro(estimate.items[index].euros)}</span>}
           </div>
           <button type="button" aria-label={`Download STL van bakje B${index+1}`}
             onClick={()=>downloadOne(index)} disabled={!!error}>STL ↓</button>
