@@ -25,3 +25,11 @@
 .corner-hit{fill:transparent;pointer-events:all;cursor:move;touch-action:none}
 .corner-hit:hover,.corner-hit:focus-visible{fill:#47e5ca;fill-opacity:.19;stroke:#8bffe4;stroke-width:2;outline:none;vector-effect:non-scaling-stroke}
 .canvas.is-dragging svg{touch-action:none}
+
+/* Border drag targets are only shown for the selected bin; corners sit above. */
+.selected-side-line{stroke:#4eefd0;stroke-width:3.5;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.selected-side-fixed{stroke:#8795a7;stroke-width:2;stroke-dasharray:5 6;vector-effect:non-scaling-stroke;opacity:.7}
+.selected-side-hit{stroke:transparent;stroke-width:20;pointer-events:stroke;touch-action:none;vector-effect:non-scaling-stroke}
+.selected-side-hit[aria-label*="left"],.selected-side-hit[aria-label*="right"]{cursor:col-resize}
+.selected-side-hit[aria-label*="top"],.selected-side-hit[aria-label*="bottom"]{cursor:row-resize}
+.selected-side-hit:hover,.selected-side-hit:focus-visible{stroke:rgba(71,229,202,.25);outline:none}
