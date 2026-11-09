@@ -8,7 +8,7 @@
 
 - **Lade op maat:** stel breedte, diepte en bakjehoogte in millimeters in.
 - **Nauwkeurige 2D-indeling:** zie echte bakjesafmetingen, wanddikte, ronde hoeken en vrije ruimtes direct mee veranderen met de instellingen.
-- **Vakken aanpassen:** selecteer een vak, controleer de randen en versleep de hoekpunten met muis of vinger. Splits of combineer rechthoekige vakken.
+- **Vakken aanpassen:** selecteer een vak, controleer de randen en versleep de randen of hoekpunten met muis of vinger. Splits of combineer rechthoekige vakken.
 - **Printinstellingen:** stel wanddikte, bodemdikte, hoekafronding en pasruimte in.
 - **Losse STL-bakjes:** download per vak een eigen bestand voor je slicer.
 - **Ontwerp bewaren:** sla je huidige indeling op als JSON-bestand.
@@ -18,7 +18,7 @@
 
 1. Meet de binnenmaat van je lade en vul de breedte en diepte in.
 2. Begin met de automatisch voorgestelde indeling.
-3. Selecteer een vak. Versleep de turquoise hoekpunten om de aangrenzende vakken aan te passen, of splits en combineer vakken.
+3. Selecteer een vak. Versleep de turquoise randen of hoekpunten om de aangrenzende vakken aan te passen, of splits en combineer vakken.
 4. Stel de gewenste hoogte en printinstellingen in.
 5. Download de afzonderlijke STL-bestanden en open ze in je slicer.
 
