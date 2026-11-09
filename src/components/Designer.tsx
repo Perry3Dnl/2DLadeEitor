@@ -4,6 +4,7 @@ import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEve
 import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
 import {exportAllBins,exportOneBin} from "@/lib/export-all";
 import {fitBinSize,type SizingAxis} from "@/lib/size-bin";
+import {parseSizeInput} from "@/lib/parse-size";
 import {previewBin} from "@/lib/preview";
 import {getCellCorners,moveCellCorner,CornerName,getCellSides,moveCellSide,CellSideName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
@@ -22,6 +23,8 @@ export default function Designer(){
  const [dragging,setDragging]=useState(false);
  const [widthDraft,setWidthDraft]=useState("");
  const [depthDraft,setDepthDraft]=useState("");
+ const dirtySizeRef=useRef<{width:boolean;depth:boolean}>({width:false,depth:false});
+ const previousCellRef=useRef("");
  const dragRef=useRef<{name:CornerName;cellId:string;startX:number;startY:number;bins:Bin[];pointerId:number}|null>(null);
  const sideDragRef=useRef<{side:CellSideName;cellId:string;start:number;bins:Bin[];pointerId:number}|null>(null);
  const svgRef=useRef<SVGSVGElement>(null);
@@ -98,8 +101,13 @@ export default function Designer(){
  }
  const current=bins.find(b=>b.id===selected[0])||bins[0];
  const shape=current?physicalBin(current,settings):null;
- useEffect(()=>{setWidthDraft(shape?fmt(shape.width):"");},[current?.id,shape?.width]);
- useEffect(()=>{setDepthDraft(shape?fmt(shape.depth):"");},[current?.id,shape?.depth]);
+ useEffect(()=>{
+  const id=current?.id||"";
+  const changedCell=previousCellRef.current!==id;
+  if(changedCell){previousCellRef.current=id;dirtySizeRef.current={width:false,depth:false};}
+  if(changedCell||!dirtySizeRef.current.width)setWidthDraft(shape?fmt(shape.width):"");
+  if(changedCell||!dirtySizeRef.current.depth)setDepthDraft(shape?fmt(shape.depth):"");
+ },[current?.id,shape?.width,shape?.depth]);
  const corners=useMemo(()=>getCellCorners(bins,current?.id||""),[bins,current?.id]);
  const sides=useMemo(()=>getCellSides(bins,current?.id||""),[bins,current?.id]);
  const physicalPreviews=useMemo(()=>bins.map(b=>previewBin(b,settings)),[bins,settings]);
@@ -130,15 +138,15 @@ export default function Designer(){
   setMessage("Tik of klik op het tweede vak om samen te voegen.");
  }
  function commitBinSize(axis:SizingAxis,draft:string){
-  const value=draft.trim().replace(",",".");
+  dirtySizeRef.current[axis]=false;
   const reset=()=>{const currentShape=physicalBin(current,settings);
    if(axis==="width")setWidthDraft(fmt(currentShape.width));
    else setDepthDraft(fmt(currentShape.depth));
   };
-  if(!/^\\d+(?:\\.\\d+)?$/.test(value)){
+  const requested=parseSizeInput(draft);
+  if(requested===null){
    reset();setMessage("Vul een geldige maat in millimeters in, bijvoorbeeld 175,5.");return;
   }
-  const requested=Number(value);
   try{
    const result=fitBinSize(bins,current.id,axis,requested,settings);
    if(result.changed)setBins(result.bins);
@@ -146,8 +154,8 @@ export default function Designer(){
    if(axis==="width")setWidthDraft(actual);else setDepthDraft(actual);
    const label=axis==="width"?"breedte":"diepte";
    setMessage(result.adjusted?
-    `De gewenste ${label} van ${fmt(requested)} mm past niet precies. De dichtstbijzijnde geldige maat is ${actual} mm.`:
-    `De ${label} is ingesteld op ${actual} mm.`);
+    `De gewenste ${label} van ${fmt(requested)} mm past niet precies. Toegepast: ${actual} mm.`:
+    `Toegepast: ${label} ${actual} mm.`);
   }catch(e){reset();setMessage(e instanceof Error?e.message:"De maat kon niet worden aangepast.");}
  }
  function downloadFile(buffer:ArrayBuffer,name:string,mime:string){
@@ -241,20 +249,24 @@ export default function Designer(){
   <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Selecteer een vak en versleep de randen of hoekpunten. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
   <section className="panel"><h2>Geselecteerd bakje {current?(`B${bins.findIndex(b=>b.id===current.id)+1}`):""}</h2>
   {shape&&<><div className="fields size-fields">
-    <label className="field">Breedte (mm)
-      <input type="text" inputMode="decimal" aria-label="Breedte van geselecteerd bakje in millimeters"
-        value={widthDraft} onChange={e=>setWidthDraft(e.target.value)}
-        onBlur={()=>commitBinSize("width",widthDraft)}
-        onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>
-    </label>
-    <label className="field">Diepte (mm)
-      <input type="text" inputMode="decimal" aria-label="Diepte van geselecteerd bakje in millimeters"
-        value={depthDraft} onChange={e=>setDepthDraft(e.target.value)}
-        onBlur={()=>commitBinSize("depth",depthDraft)}
-        onKeyDown={e=>{if(e.key==="Enter")e.currentTarget.blur();}}/>
-    </label>
+    <div className="size-entry">
+      <label className="field" htmlFor="bin-width">Breedte (mm)</label>
+      <input id="bin-width" type="text" inputMode="decimal"
+        aria-label="Breedte van geselecteerd bakje in millimeters"
+        value={widthDraft} onChange={e=>{dirtySizeRef.current.width=true;setWidthDraft(e.target.value);}}
+        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitBinSize("width",e.currentTarget.value);}}}/>
+      <button type="button" onClick={()=>commitBinSize("width",widthDraft)}>Toepassen</button>
+    </div>
+    <div className="size-entry">
+      <label className="field" htmlFor="bin-depth">Diepte (mm)</label>
+      <input id="bin-depth" type="text" inputMode="decimal"
+        aria-label="Diepte van geselecteerd bakje in millimeters"
+        value={depthDraft} onChange={e=>{dirtySizeRef.current.depth=true;setDepthDraft(e.target.value);}}
+        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commitBinSize("depth",e.currentTarget.value);}}}/>
+      <button type="button" onClick={()=>commitBinSize("depth",depthDraft)}>Toepassen</button>
+    </div>
   </div>
-  <p className="hint">Voer de buitenmaat van je bakje in. Als die niet precies past, gebruiken we automatisch de dichtstbijzijnde geldige maat.</p>
+  <p className="hint">Vul de buitenmaat in en druk op Toepassen of Enter. Indien nodig wordt de dichtstbijzijnde passende maat gekozen.</p>
   <div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div>
   <div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div>
   <div className="metrics"><span>Hoekradius</span><strong>{fmt(shape.radius)} mm</strong></div>

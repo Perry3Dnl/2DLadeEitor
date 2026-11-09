@@ -9,6 +9,7 @@ import {exportAllBins} from "../src/lib/export-all.ts";
 import {createZip} from "../src/lib/zip.ts";
 import {exportOneBin} from "../src/lib/export-all.ts";
 import {fitBinSize} from "../src/lib/size-bin.ts";
+import {parseSizeInput} from "../src/lib/parse-size.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -392,4 +393,27 @@ for name in archive.namelist():
   assert.equal(new DataView(one.data).getUint32(80,true)>0,true);
  });
  assert.throws(()=>exportOneBin(updated,defaults,-1),/bestaat niet/);
+});
+
+test("actual UI dimension parser accepts numbers and Dutch decimal commas",()=>{
+ for(const [input,expected] of [["175.5",175.5],["175,5",175.5],[" 200 ",200],["0",0],["123.45",123.45]]){
+  assert.equal(parseSizeInput(input),expected,input);
+ }
+ for(const invalid of ["","abc","1..5","12,34,56","1.2.3","12mm","-1","Infinity"]){
+  assert.equal(parseSizeInput(invalid),null,invalid);
+ }
+});
+test("submitted text dimension changes actual rendered and exportable bin geometry",()=>{
+ const original=makeGrid(600,400);
+ for(const [axis,input] of [["width","175,5"],["depth","125.2"]]){
+  const size=parseSizeInput(input);
+  assert.notEqual(size,null);
+  const result=fitBinSize(original,original[0].id,axis,size,defaults);
+  assert.equal(result.changed,true);
+  assert.equal(result.adjusted,false);
+  assert.equal(physicalBin(result.bins[0],defaults)[axis],size);
+  assert.equal(validateLayout(result.bins,defaults),null);
+  const one=exportOneBin(result.bins,defaults,0);
+  assert.ok(one.data.byteLength>84);
+ }
 });
