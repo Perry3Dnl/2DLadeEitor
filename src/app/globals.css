@@ -5,3 +5,15 @@
 .boundary-guide{stroke:#47e5ca;stroke-width:3;stroke-opacity:.9;vector-effect:non-scaling-stroke;stroke-linecap:round}
 .drag-boundary{stroke:transparent;stroke-opacity:1;stroke-width:24;pointer-events:stroke;touch-action:none}
 .drag-boundary:hover,.drag-boundary:focus-visible,.is-dragging .drag-boundary{stroke:#47e5ca;stroke-opacity:.20;outline:none}
+
+/* Accurate top-down footprints. Existing border/drag controls remain above these. */
+.actual-bin .bin-outer{fill:#24756d;stroke:#62e6cf;stroke-width:1.25;vector-effect:non-scaling-stroke}
+.actual-bin .bin-inside{fill:#103c44;stroke:#277c78;stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
+.actual-bin.active .bin-outer{fill:#328b77;stroke:#b6ffe8;stroke-width:2;vector-effect:non-scaling-stroke}
+.actual-bin.active .bin-inside{fill:#1a5b59;stroke:#66d4be}
+.preview-legend{display:flex;gap:9px 20px;flex-wrap:wrap;margin:0 0 15px;color:#b4cad7;font-size:12px;line-height:1.5}
+.preview-legend span{display:flex;align-items:center;gap:7px}
+.preview-legend i{width:13px;height:13px;border-radius:3px;display:inline-block;flex-shrink:0}
+.legend-outline{background:#24756d;border:2px solid #62e6cf}.legend-gap{background:#0b1b2a;border:1px dashed #8ca7b7}
+.section-heading{font-size:13px;font-weight:700;margin:16px 0 3px;color:#c4e0e5}
+.section-preview{width:100%;height:auto;background:#0b1b2a;border:1px solid #34566a;border-radius:11px}
