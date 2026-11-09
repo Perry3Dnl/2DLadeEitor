@@ -4,7 +4,7 @@ import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEve
 import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
 import {downloadSTL,createBinTriangles} from "@/lib/stl";
 import {previewBin} from "@/lib/preview";
-import {getCellCorners,moveCellCorner,CornerName} from "@/lib/corners";
+import {getCellCorners,moveCellCorner,CornerName,getCellSides,moveCellSide,CellSideName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
 const fields:{key:keyof Settings;label:string;step:number}[]=[
  {key:"width",label:"Ladebreedte",step:1},{key:"depth",label:"Ladediepte",step:1},
@@ -20,9 +20,10 @@ export default function Designer(){
  const [secondary,setSecondary]=useState("");
  const [dragging,setDragging]=useState(false);
  const dragRef=useRef<{name:CornerName;cellId:string;startX:number;startY:number;bins:Bin[];pointerId:number}|null>(null);
+ const sideDragRef=useRef<{side:CellSideName;cellId:string;start:number;bins:Bin[];pointerId:number}|null>(null);
  const svgRef=useRef<SVGSVGElement>(null);
  const error=validateSettings(settings)||validateLayout(bins,settings);
- function pointMm(e:ReactPointerEvent<SVGCircleElement>){
+ function pointMm(e:ReactPointerEvent<SVGCircleElement|SVGLineElement>){
   const matrix=svgRef.current?.getScreenCTM();
   if(!matrix)return null;
   const point=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());
@@ -51,6 +52,39 @@ export default function Designer(){
   if(dragRef.current?.pointerId!==e.pointerId)return;
   dragRef.current=null;setDragging(false);
  }
+ function startSide(e:ReactPointerEvent<SVGLineElement>,name:CellSideName){
+  if(error||!current)return;
+  const point=pointMm(e);
+  if(!point)return;
+  e.preventDefault();e.stopPropagation();
+  e.currentTarget.setPointerCapture(e.pointerId);
+  const axis=name==="top"||name==="bottom"?"y":"x";
+  sideDragRef.current={side:name,cellId:current.id,start:point[axis],bins,pointerId:e.pointerId};
+  setDragging(true);
+  setMessage("Sleep de geselecteerde rand. De aangrenzende bakjes passen zich aan.");
+ }
+ function moveSide(e:ReactPointerEvent<SVGLineElement>){
+  const drag=sideDragRef.current;
+  if(!drag||drag.pointerId!==e.pointerId)return;
+  const point=pointMm(e);
+  if(!point)return;
+  const axis=drag.side==="top"||drag.side==="bottom"?"y":"x";
+  const delta=Math.round((point[axis]-drag.start)*10)/10;
+  setBins(moveCellSide(drag.bins,drag.cellId,drag.side,delta,settings));
+ }
+ function endSide(e:ReactPointerEvent<SVGLineElement>){
+  if(sideDragRef.current?.pointerId!==e.pointerId)return;
+  sideDragRef.current=null;setDragging(false);
+ }
+ function nudgeSide(e:ReactKeyboardEvent<SVGLineElement>,name:CellSideName){
+  const step=e.shiftKey?5:1;
+  const vertical=name==="left"||name==="right";
+  const delta=vertical?(e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0):
+   (e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0);
+  if(!delta)return;
+  e.preventDefault();e.stopPropagation();
+  setBins(old=>moveCellSide(old,current.id,name,delta,settings));
+ }
  function nudgeCorner(e:ReactKeyboardEvent<SVGCircleElement>,name:CornerName){
   const step=e.shiftKey?5:1;
   const dx=e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0;
@@ -62,6 +96,7 @@ export default function Designer(){
  const current=bins.find(b=>b.id===selected[0])||bins[0];
  const shape=current?physicalBin(current,settings):null;
  const corners=useMemo(()=>getCellCorners(bins,current?.id||""),[bins,current?.id]);
+ const sides=useMemo(()=>getCellSides(bins,current?.id||""),[bins,current?.id]);
  const physicalPreviews=useMemo(()=>bins.map(b=>previewBin(b,settings)),[bins,settings]);
  const scale=900/Math.max(settings.width,settings.depth,1);
  const active=useMemo(()=>new Set(selected),[selected]);
@@ -85,6 +120,30 @@ export default function Designer(){
     {current&&<rect className="selected-cell-outline" pointerEvents="none"
       x={current.x*scale} y={current.y*scale}
       width={current.width*scale} height={current.depth*scale}/>}
+    {sides.map(side=>{
+      const vertical=side.axis==="vertical";
+      const span=side.length*scale;
+      const inset=Math.min(24,span/3);
+      const x1=vertical?side.x*scale:side.x*scale+inset;
+      const y1=vertical?side.y*scale+inset:side.y*scale;
+      const x2=vertical?side.x*scale:side.x*scale+span-inset;
+      const y2=vertical?side.y*scale+span-inset:side.y*scale;
+      return <g key={side.name}>
+        <line className={side.edgeId?"selected-side-line":"selected-side-fixed"} pointerEvents="none"
+          x1={x1} y1={y1} x2={x2} y2={y2}/>
+        {side.edgeId&&<line className="selected-side-hit"
+          x1={x1} y1={y1} x2={x2} y2={y2}
+          role="slider" tabIndex={0}
+          aria-label={`Rand ${side.name} van geselecteerd bakje verplaatsen`}
+          aria-valuemin={0} aria-valuemax={vertical?settings.width:settings.depth}
+          aria-valuenow={Math.round(vertical?side.x:side.y)}
+          onPointerDown={e=>startSide(e,side.name)}
+          onPointerMove={moveSide} onPointerUp={endSide} onPointerCancel={endSide}
+          onLostPointerCapture={()=>{sideDragRef.current=null;setDragging(false);}}
+          onKeyDown={e=>nudgeSide(e,side.name)}
+          onClick={e=>e.stopPropagation()}/>}
+      </g>;
+    })}
     {corners.map(corner=>{
       const enabled=Boolean(corner.verticalId||corner.horizontalId);
       return <g key={corner.name}>
@@ -109,27 +168,12 @@ export default function Designer(){
     {error&&<p className="validation-error" role="alert"><strong>Controleer je instellingen:</strong> {error}</p>}
   <div className="preview-legend"><span><i className="legend-outline"/> Bakjes met echte buitenmaat, hoekradius en wanddikte</span><span><i className="legend-gap"/> Vrije ruimte door buitenmarge en tussenruimte</span></div>
   <div className="actions"><button onClick={()=>split("vertical")} disabled={!!error}>↔ Verticaal splitsen</button><button onClick={()=>split("horizontal")} disabled={!!error}>↕ Horizontaal splitsen</button><button onClick={merge} disabled={!!error||(!secondary&&selected.length!==2)}>Vakken samenvoegen</button><button onClick={()=>{setBins(makeGrid(settings.width,settings.depth));setSelected(["bin-0"]);setSecondary("");setMessage("3 × 2 raster hersteld.")}} disabled={!!validateSettings(settings)}>Herstel 3 × 2</button></div>
-  <p className="hint">Tik of klik een vak om de randen te controleren. Versleep de turquoise hoekpunten om de aangrenzende vakken groter of kleiner te maken. Bij een buitenrand beweegt alleen de beschikbare richting. Op mobiel werkt dit met je vinger. Gebruik de pijltjestoetsen voor 1 mm (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
+  <p className="hint">Tik of klik een vak. Sleep de turquoise randen om één richting te wijzigen, of de hoekpunten om twee richtingen tegelijk te wijzigen. De buitenranden van de lade blijven vast. Op mobiel werkt dit met je vinger. Gebruik de pijltjestoetsen voor 1 mm (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
   <label className="field">Tweede vak selecteren (mobiel)<select value={secondary} onChange={e=>setSecondary(e.target.value)} style={{background:"#0b1b2a",color:"white",padding:10,borderRadius:8,border:"1px solid #405d70"}}><option value="">Geen</option>{bins.filter(v=>v.id!==current.id).map(v=><option key={v.id} value={v.id}>Vak {bins.indexOf(v)+1}</option>)}</select></label></section>
-  <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Selecteer een vak en versleep de hoekpunten. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
+  <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Selecteer een vak en versleep de randen of hoekpunten. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
   <section className="panel"><h2>Geselecteerd bakje</h2>{shape&&<><div className="metrics"><span>Breedte</span><strong>{fmt(shape.width)} mm</strong></div><div className="metrics"><span>Diepte</span><strong>{fmt(shape.depth)} mm</strong></div><div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div><div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div>
   <div className="metrics"><span>Hoekradius</span><strong>{fmt(shape.radius)} mm</strong></div>
   <div className="metrics"><span>Binnenmaat</span><strong>{fmt(Math.max(0,shape.width-2*shape.wall))} × {fmt(Math.max(0,shape.depth-2*shape.wall))} mm</strong></div>
-  <div className="section-heading">Zijaanzicht · doorsnede van geselecteerd bakje</div>
-  <svg className="section-preview" viewBox="0 0 400 160" role="img" aria-label={`Doorsnede: hoogte ${fmt(shape.height)} mm, wand ${fmt(shape.wall)} mm, bodem ${fmt(shape.floor)} mm`}>
-    {(()=>{
-      const w=shape.width,h=shape.height,t=shape.wall,f=shape.floor;
-      const displayScale=Math.min(320/Math.max(w,1),105/Math.max(h,1));
-      const W=w*displayScale,H=h*displayScale,T=Math.max(1,t*displayScale),F=Math.max(1,f*displayScale);
-      const X=(400-W)/2,Y=130-H;
-      return <g>
-        <path d={`M ${X} ${Y} V ${Y+H} H ${X+W} V ${Y} H ${X+W-T} V ${Y+H-F} H ${X+T} V ${Y} Z`} fill="#37c7ad" fillOpacity=".65" stroke="#66f2d6" strokeWidth="1.2"/>
-        <text x="200" y="147" fill="#bfd5dd" textAnchor="middle" fontSize="12">Breedte {fmt(w)} mm · bodem {fmt(f)} mm</text>
-        <text x="200" y="15" fill="#bfd5dd" textAnchor="middle" fontSize="12">Hoogte {fmt(h)} mm · wand {fmt(t)} mm</text>
-      </g>;
-    })()}
-  </svg>
-  <p className="hint">Bovenaan zie je het bakje van boven; hier zie je hoogte en bodemdikte in doorsnede. De weergave schaalt automatisch mee.</p>
   <button className="primary" onClick={exportSTL} disabled={!!error}>↓ Download STL van dit bakje</button></>}<button style={{width:"100%"}} onClick={save} disabled={!!error}>Bewaar project als JSON</button><p className="alert" role="status">{error||message}</p></section></aside></div>
   <footer>Versie 0.1 · Build {process.env.NEXT_PUBLIC_COMMIT_SHA?.slice(0,8)||"lokaal"} · STL's controleren in de slicer vóór het printen.</footer>
  </main>
