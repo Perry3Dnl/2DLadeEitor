@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {makeGrid,splitBin,mergeBins,physicalBin,defaults,validateLayout,validateSettings,findBoundaries,moveBoundary} from "../src/lib/layout.ts";
 import {createBinTriangles,binarySTL} from "../src/lib/stl.ts";
 import {previewBin} from "../src/lib/preview.ts";
-import {getCellCorners,moveCellCorner} from "../src/lib/corners.ts";
+import {getCellCorners,moveCellCorner,getCellSides,moveCellSide} from "../src/lib/corners.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -221,4 +221,50 @@ test("corner drags reject NaN and retain original cell coordinates when locked",
  const bins=makeGrid(600,400);
  assert.equal(moveCellCorner(bins,bins[0].id,"br",NaN,5,defaults),bins);
  assert.equal(moveCellCorner(bins,"missing","br",5,5,defaults),bins);
+});
+
+test("selected bin exposes all four sides; fixed outer edges are not movable",()=>{
+ const bins=makeGrid(600,400);
+ const sides=getCellSides(bins,bins[0].id);
+ assert.deepEqual(sides.map(s=>s.name),["top","right","bottom","left"]);
+ assert.equal(sides[0].edgeId,null);
+ assert.equal(sides[3].edgeId,null);
+ assert.ok(sides[1].edgeId);
+ assert.ok(sides[2].edgeId);
+ assert.equal(moveCellSide(bins,bins[0].id,"left",40,defaults),bins);
+ assert.equal(moveCellSide(bins,bins[0].id,"top",40,defaults),bins);
+});
+test("dragging selected right edge changes only horizontal dimensions",()=>{
+ const bins=makeGrid(600,400),updated=moveCellSide(bins,bins[0].id,"right",25,defaults);
+ assert.equal(validateLayout(updated,defaults),null);
+ assert.equal(updated[0].width,225);
+ assert.equal(updated[0].depth,200);
+ assert.equal(updated[1].x,225);
+ assert.equal(updated[1].depth,200);
+ assert.equal(updated[3].width,200);
+});
+test("dragging selected bottom edge changes only vertical dimensions",()=>{
+ const bins=makeGrid(600,400),updated=moveCellSide(bins,bins[0].id,"bottom",30,defaults);
+ assert.equal(validateLayout(updated,defaults),null);
+ assert.equal(updated[0].depth,230);
+ assert.equal(updated[0].width,200);
+ assert.equal(updated[3].y,230);
+ assert.equal(updated[1].depth,200);
+});
+test("edge dragging and corner dragging stay consistent after T-junctions",()=>{
+ const bins=makeGrid(600,400);
+ const changed=moveCellCorner(bins,bins[0].id,"br",25,30,defaults);
+ assert.equal(validateLayout(changed,defaults),null);
+ for(const bin of changed)for(const side of getCellSides(changed,bin.id)){
+  for(const delta of [-10000,-50,0,50,10000]){
+   const after=moveCellSide(changed,bin.id,side.name,delta,defaults);
+   assert.equal(validateLayout(after,defaults),null,bin.id+" "+side.name+" "+delta);
+   assert.equal(after.length,changed.length);
+  }
+ }
+});
+test("invalid side moves never change layout",()=>{
+ const bins=makeGrid(600,400);
+ assert.equal(moveCellSide(bins,bins[0].id,"right",NaN,defaults),bins);
+ assert.equal(moveCellSide(bins,"not-found","right",25,defaults),bins);
 });
