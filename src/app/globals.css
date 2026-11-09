@@ -17,3 +17,11 @@
 .legend-outline{background:#24756d;border:2px solid #62e6cf}.legend-gap{background:#0b1b2a;border:1px dashed #8ca7b7}
 .section-heading{font-size:13px;font-weight:700;margin:16px 0 3px;color:#c4e0e5}
 .section-preview{width:100%;height:auto;background:#0b1b2a;border:1px solid #34566a;border-radius:11px}
+
+/* Selection-first editor: cell perimeter and corner drag points. */
+.selected-cell-outline{fill:none;stroke:#f1f7ff;stroke-width:2.2;stroke-dasharray:7 5;vector-effect:non-scaling-stroke}
+.corner-handle{fill:#47e5ca;stroke:#08352f;stroke-width:2.8;vector-effect:non-scaling-stroke}
+.corner-handle.corner-locked{fill:#728a96;stroke:#112837;opacity:.7}
+.corner-hit{fill:transparent;pointer-events:all;cursor:move;touch-action:none}
+.corner-hit:hover,.corner-hit:focus-visible{fill:#47e5ca;fill-opacity:.19;stroke:#8bffe4;stroke-width:2;outline:none;vector-effect:non-scaling-stroke}
+.canvas.is-dragging svg{touch-action:none}
