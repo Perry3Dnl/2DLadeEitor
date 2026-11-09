@@ -7,7 +7,7 @@
 ## Wat kun je ermee?
 
 - **Lade op maat:** stel breedte, diepte en bakjehoogte in millimeters in.
-- **Duidelijke 2D-indeling:** bekijk direct hoe de vakken in je lade passen.
+- **Nauwkeurige 2D-indeling:** zie echte bakjesafmetingen, wanddikte, ronde hoeken en vrije ruimtes direct mee veranderen met de instellingen.
 - **Vakken aanpassen:** versleep scheidingsranden met muis of vinger, of selecteer, splits en combineer rechthoekige vakken.
 - **Printinstellingen:** stel wanddikte, bodemdikte, hoekafronding en pasruimte in.
 - **Losse STL-bakjes:** download per vak een eigen bestand voor je slicer.
