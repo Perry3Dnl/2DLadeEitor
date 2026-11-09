@@ -23,7 +23,8 @@ export function validateLayout(bins:Bin[],s:Settings){if(!bins.length||bins.leng
 
 export type Boundary={
  id:string;axis:"vertical"|"horizontal";firstId:string;secondId:string;
- firstIds:string[];secondIds:string[];x:number;y:number;length:number
+ firstIds:string[];secondIds:string[];x:number;y:number;length:number;
+ segments:{start:number;end:number}[]
 };
 const eq=(a:number,b:number)=>Math.abs(a-b)<.002;
 type Segment={id:string;start:number;end:number};
@@ -61,11 +62,15 @@ export function findBoundaries(bins:Bin[]):Boundary[]{
     const queue=[i];visited.add(i);
     const groupA=new Set<string>(),groupB=new Set<string>();
     let start=Infinity,end=-Infinity;
+    const spans:{start:number;end:number}[]=[];
     while(queue.length){
      const k=queue.pop()!,{a,b}=links[k];
      groupA.add(a.id);groupB.add(b.id);
-     start=Math.min(start,Math.max(a.start,b.start));
-     end=Math.max(end,Math.min(a.end,b.end));
+     const overlapStart=Math.max(a.start,b.start);
+     const overlapEnd=Math.min(a.end,b.end);
+     spans.push({start:overlapStart,end:overlapEnd});
+     start=Math.min(start,overlapStart);
+     end=Math.max(end,overlapEnd);
      for(let j=0;j<links.length;j++){
       if(visited.has(j))continue;
       const candidate=links[j];
@@ -74,12 +79,18 @@ export function findBoundaries(bins:Bin[]):Boundary[]{
       }
      }
     }
+    const segments:{start:number;end:number}[]=[];
+    for(const span of spans.sort((a,b)=>a.start-b.start)){
+     const previous=segments[segments.length-1];
+     if(previous&&span.start<=previous.end+.002)previous.end=Math.max(previous.end,span.end);
+     else segments.push({...span});
+    }
     const firstIds=[...groupA].sort(),secondIds=[...groupB].sort();
     // IDs must remain stable while the boundary is dragged.
     const id=axis+":"+firstIds.join(",")+"|"+secondIds.join(",");
     results.push({id,axis,firstId:firstIds[0],secondId:secondIds[0],
      firstIds,secondIds,x:axis==="vertical"?position:start,
-     y:axis==="horizontal"?position:start,length:r(end-start)});
+     y:axis==="horizontal"?position:start,length:r(end-start),segments});
    }
   }
  }
@@ -97,7 +108,21 @@ export function moveBoundary(bins:Bin[],edge:Boundary,delta:number,s:Settings):B
  const dimension=fresh.axis==="vertical"?"width":"depth";
  const neg=Math.max(...bins.filter(b=>first.has(b.id)).map(b=>30-b[dimension]));
  const pos=Math.min(...bins.filter(b=>second.has(b.id)).map(b=>b[dimension]-30));
- const requested=Math.max(neg,Math.min(pos,delta));
+ // Dividers cannot cross other parallel boundaries at touching T junctions.
+ // Stop 0.1 mm before the crossing, preserving continuous boundary identity.
+ let minDelta=neg,maxDelta=pos;
+ const currentPosition=axis==="vertical"?fresh.x:fresh.y;
+ for(const other of findBoundaries(bins)){
+  if(other.id===fresh.id||other.axis!==axis)continue;
+  if(!fresh.segments.some(a=>other.segments.some(b=>
+   Math.min(a.end,b.end)>=Math.max(a.start,b.start)-.002)))continue;
+  const otherPosition=axis==="vertical"?other.x:other.y;
+  if(otherPosition>currentPosition+.002)
+   maxDelta=Math.min(maxDelta,otherPosition-currentPosition-0.1);
+  else if(otherPosition<currentPosition-.002)
+   minDelta=Math.max(minDelta,otherPosition-currentPosition+0.1);
+ }
+ const requested=Math.max(minDelta,Math.min(maxDelta,delta));
  function candidate(amount:number):Bin[]{
   return bins.map(b=>{
    if(first.has(b.id))return {...b,[dimension]:r(b[dimension]+amount)};
