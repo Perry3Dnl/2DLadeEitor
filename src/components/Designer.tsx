@@ -1,9 +1,10 @@
 "use client";
 import { useMemo,useState,useRef } from "react";
 import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent} from "react";
-import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout,findBoundaries,moveBoundary,Boundary} from "@/lib/layout";
+import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
 import {downloadSTL,createBinTriangles} from "@/lib/stl";
 import {previewBin} from "@/lib/preview";
+import {getCellCorners,moveCellCorner,CornerName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
 const fields:{key:keyof Settings;label:string;step:number}[]=[
  {key:"width",label:"Ladebreedte",step:1},{key:"depth",label:"Ladediepte",step:1},
@@ -18,43 +19,49 @@ export default function Designer(){
  const [message,setMessage]=useState("Klik op een vak om het te selecteren. Met Shift+klik selecteer je een tweede vak.");
  const [secondary,setSecondary]=useState("");
  const [dragging,setDragging]=useState(false);
- const dragRef=useRef<{edge:Boundary;start:number;bins:Bin[];pointerId:number}|null>(null);
+ const dragRef=useRef<{name:CornerName;cellId:string;startX:number;startY:number;bins:Bin[];pointerId:number}|null>(null);
  const svgRef=useRef<SVGSVGElement>(null);
- const boundaries=useMemo(()=>findBoundaries(bins),[bins]);
  const error=validateSettings(settings)||validateLayout(bins,settings);
- function pointerMm(e:ReactPointerEvent<SVGLineElement>,axis:"vertical"|"horizontal"){
+ function pointMm(e:ReactPointerEvent<SVGCircleElement>){
   const matrix=svgRef.current?.getScreenCTM();
-  if(!matrix)return 0;
+  if(!matrix)return null;
   const point=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());
-  return (axis==="vertical"?point.x:point.y)/scale;
+  return {x:point.x/scale,y:point.y/scale};
  }
- function startDrag(e:ReactPointerEvent<SVGLineElement>,edge:Boundary){
-  if(error)return;
+ function startCorner(e:ReactPointerEvent<SVGCircleElement>,name:CornerName){
+  if(error||!current)return;
+  const point=pointMm(e);
+  if(!point)return;
   e.preventDefault();e.stopPropagation();
   e.currentTarget.setPointerCapture(e.pointerId);
-  dragRef.current={edge,start:pointerMm(e,edge.axis),bins,pointerId:e.pointerId};
+  dragRef.current={name,cellId:current.id,startX:point.x,startY:point.y,bins,pointerId:e.pointerId};
   setDragging(true);
-  setMessage("Versleep de turquoise rand; de aangrenzende bakjes veranderen samen.");
+  setMessage("Versleep de hoekpunt-handgreep om de aangrenzende vakken aan te passen.");
  }
- function moveDrag(e:ReactPointerEvent<SVGLineElement>){
+ function moveCorner(e:ReactPointerEvent<SVGCircleElement>){
   const drag=dragRef.current;
   if(!drag||drag.pointerId!==e.pointerId)return;
-  const delta=pointerMm(e,drag.edge.axis)-drag.start;
-  setBins(moveBoundary(drag.bins,drag.edge,delta,settings));
+  const point=pointMm(e);
+  if(!point)return;
+  const dx=Math.round((point.x-drag.startX)*10)/10;
+  const dy=Math.round((point.y-drag.startY)*10)/10;
+  setBins(moveCellCorner(drag.bins,drag.cellId,drag.name,dx,dy,settings));
  }
- function endDrag(e:ReactPointerEvent<SVGLineElement>){
+ function endCorner(e:ReactPointerEvent<SVGCircleElement>){
   if(dragRef.current?.pointerId!==e.pointerId)return;
   dragRef.current=null;setDragging(false);
  }
- function nudge(e:ReactKeyboardEvent<SVGLineElement>,edge:Boundary){
+ function nudgeCorner(e:ReactKeyboardEvent<SVGCircleElement>,name:CornerName){
   const step=e.shiftKey?5:1;
-  const delta=edge.axis==="vertical"?(e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0):(e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0);
-  if(!delta)return;
+  const dx=e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0;
+  const dy=e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0;
+  if(!dx&&!dy)return;
   e.preventDefault();e.stopPropagation();
-  setBins(old=>moveBoundary(old,edge,delta,settings));
+  setBins(old=>moveCellCorner(old,current.id,name,dx,dy,settings));
  }
  const current=bins.find(b=>b.id===selected[0])||bins[0];
  const shape=current?physicalBin(current,settings):null;
+ const corners=useMemo(()=>getCellCorners(bins,current?.id||""),[bins,current?.id]);
  const physicalPreviews=useMemo(()=>bins.map(b=>previewBin(b,settings)),[bins,settings]);
  const scale=900/Math.max(settings.width,settings.depth,1);
  const active=useMemo(()=>new Set(selected),[selected]);
@@ -75,35 +82,36 @@ export default function Designer(){
       <text x={(p.x+p.width/2)*scale} y={(p.y+p.depth/2)*scale-7} textAnchor="middle">B{i+1}</text>
       <text x={(p.x+p.width/2)*scale} y={(p.y+p.depth/2)*scale+15} textAnchor="middle" style={{fontSize:13,fontWeight:400}}>{fmt(p.width)} × {fmt(p.depth)}</text>
     </g>)}
-    {boundaries.map(edge=>{
-      const vertical=edge.axis==="vertical";
-      return <g key={edge.id}>{edge.segments.map((segment,index)=>{
-        const x1=(vertical?edge.x:segment.start)*scale;
-        const y1=(vertical?segment.start:edge.y)*scale;
-        const x2=(vertical?edge.x:segment.end)*scale;
-        const y2=(vertical?segment.end:edge.y)*scale;
-        return <g key={index}>
-          <line className="boundary-guide" aria-hidden="true" pointerEvents="none"
-            x1={x1} y1={y1} x2={x2} y2={y2}/>
-          <line className="drag-boundary" x1={x1} y1={y1} x2={x2} y2={y2}
-            role="slider" tabIndex={0}
-            aria-label={vertical?"Verticale scheidingsrand verslepen":"Horizontale scheidingsrand verslepen"}
-            aria-valuemin={0} aria-valuemax={vertical?settings.width:settings.depth}
-            aria-valuenow={vertical?edge.x:edge.y}
-            onPointerDown={e=>startDrag(e,edge)}
-            onPointerMove={moveDrag} onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-            onLostPointerCapture={()=>{dragRef.current=null;setDragging(false);}}
-            onKeyDown={e=>nudge(e,edge)}/>
-        </g>;
-      })}</g>;
-    })}</svg></div>
+    {current&&<rect className="selected-cell-outline" pointerEvents="none"
+      x={current.x*scale} y={current.y*scale}
+      width={current.width*scale} height={current.depth*scale}/>}
+    {corners.map(corner=>{
+      const enabled=Boolean(corner.verticalId||corner.horizontalId);
+      return <g key={corner.name}>
+        <circle className={enabled?"corner-handle":"corner-handle corner-locked"}
+          cx={corner.x*scale} cy={corner.y*scale} r={8} pointerEvents="none" aria-hidden="true"/>
+        {enabled&&<circle className="corner-hit"
+          cx={corner.x*scale} cy={corner.y*scale} r={19}
+          role="slider" tabIndex={0}
+          aria-label={`Hoekpunt ${corner.name} van geselecteerd bakje verplaatsen`}
+          aria-valuemin={0} aria-valuemax={settings.width+settings.depth}
+          aria-valuenow={Math.round(corner.x+corner.y)}
+          onPointerDown={e=>startCorner(e,corner.name)}
+          onPointerMove={moveCorner}
+          onPointerUp={endCorner}
+          onPointerCancel={endCorner}
+          onLostPointerCapture={()=>{dragRef.current=null;setDragging(false);}}
+          onKeyDown={e=>nudgeCorner(e,corner.name)}
+          onClick={e=>e.stopPropagation()}/>}
+      </g>;
+    })}
+</svg></div>
     {error&&<p className="validation-error" role="alert"><strong>Controleer je instellingen:</strong> {error}</p>}
   <div className="preview-legend"><span><i className="legend-outline"/> Bakjes met echte buitenmaat, hoekradius en wanddikte</span><span><i className="legend-gap"/> Vrije ruimte door buitenmarge en tussenruimte</span></div>
   <div className="actions"><button onClick={()=>split("vertical")} disabled={!!error}>↔ Verticaal splitsen</button><button onClick={()=>split("horizontal")} disabled={!!error}>↕ Horizontaal splitsen</button><button onClick={merge} disabled={!!error||(!secondary&&selected.length!==2)}>Vakken samenvoegen</button><button onClick={()=>{setBins(makeGrid(settings.width,settings.depth));setSelected(["bin-0"]);setSecondary("");setMessage("3 × 2 raster hersteld.")}} disabled={!!validateSettings(settings)}>Herstel 3 × 2</button></div>
-  <p className="hint">Sleep een turquoise scheidingsrand om de bakjes erlangs groter of kleiner te maken, ook bij T-verbindingen. Randen stoppen bij andere scheidingslijnen in plaats van erdoorheen te schuiven. Op mobiel werkt dit met je vinger. Met de pijltjestoetsen kun je een geselecteerde rand per 1 mm verplaatsen (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
+  <p className="hint">Tik of klik een vak om de randen te controleren. Versleep de turquoise hoekpunten om de aangrenzende vakken groter of kleiner te maken. Bij een buitenrand beweegt alleen de beschikbare richting. Op mobiel werkt dit met je vinger. Gebruik de pijltjestoetsen voor 1 mm (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
   <label className="field">Tweede vak selecteren (mobiel)<select value={secondary} onChange={e=>setSecondary(e.target.value)} style={{background:"#0b1b2a",color:"white",padding:10,borderRadius:8,border:"1px solid #405d70"}}><option value="">Geen</option>{bins.filter(v=>v.id!==current.id).map(v=><option key={v.id} value={v.id}>Vak {bins.indexOf(v)+1}</option>)}</select></label></section>
-  <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Scheidingsranden kun je verslepen. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
+  <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Selecteer een vak en versleep de hoekpunten. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
   <section className="panel"><h2>Geselecteerd bakje</h2>{shape&&<><div className="metrics"><span>Breedte</span><strong>{fmt(shape.width)} mm</strong></div><div className="metrics"><span>Diepte</span><strong>{fmt(shape.depth)} mm</strong></div><div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div><div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div>
   <div className="metrics"><span>Hoekradius</span><strong>{fmt(shape.radius)} mm</strong></div>
   <div className="metrics"><span>Binnenmaat</span><strong>{fmt(Math.max(0,shape.width-2*shape.wall))} × {fmt(Math.max(0,shape.depth-2*shape.wall))} mm</strong></div>
