@@ -189,6 +189,11 @@ test("a selected cell shows four corners and its fixed outer corner cannot move"
 });
 test("dragging a selected inner corner moves both connected axes and preserves full layout",()=>{
  const bins=makeGrid(600,400);
+ const chosen=getCellCorners(bins,bins[0].id).find(c=>c.name==="br");
+ console.log("CORNER",chosen);
+ const afterX=moveCellCorner(bins,bins[0].id,"br",25,0,defaults);
+ console.log("AFTER_X_EDGES",findBoundaries(afterX).filter(e=>e.axis==="horizontal").map(e=>({id:e.id,y:e.y})));
+ console.log("AFTER_Y",moveCellCorner(bins,bins[0].id,"br",0,30,defaults).map(v=>({id:v.id,depth:v.depth})));
  const updated=moveCellCorner(bins,bins[0].id,"br",25,30,defaults);
  assert.equal(validateLayout(updated,defaults),null);
  assert.equal(updated.find(v=>v.id===bins[0].id).width,225);
