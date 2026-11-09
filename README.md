@@ -11,6 +11,7 @@
 - **Vakken aanpassen:** selecteer een bakje, vul de gewenste breedte of diepte in, of versleep randen en hoekpunten met muis of vinger. Afmetingen die niet precies passen worden automatisch naar de dichtstbijzijnde geldige maat aangepast. Splits of combineer rechthoekige vakken.
 - **Printinstellingen:** stel wanddikte, bodemdikte, hoekafronding en pasruimte in.
 - **PETG-kostenraming:** zie per bakje en voor de hele lade het berekende materiaalvolume, gewicht en een geschatte prijs op basis van € 0,015 per gram en een instelbare PETG-dichtheid (standaard 1,27 g/cm³).
+- **Geschatte printtijd:** zie de indicatieve printtijd per bakje en totaal. We schalen de bekende referentie van 6 uur 30 minuten voor een bakje van 200 × 200 × 55 mm (2 mm wanden, 2,4 mm bodem, 5 mm hoekradius) met het berekende materiaalvolume.
 - **STL per bakje of alles in één ZIP:** download losse bakjes één voor één via een overzichtelijke lijst of download alle STL-bestanden tegelijk.
 - **Ontwerp bewaren:** sla je huidige indeling op als JSON-bestand.
 - **Mobiel én desktop:** gebruik de ontwerper op het scherm dat je bij de hand hebt.
@@ -23,7 +24,7 @@
 4. Stel de gewenste hoogte en printinstellingen in. Bekijk daarna de PETG-materiaalraming per bakje en voor de hele indeling.
 5. Download één bakje als STL of download alle bakjes als ZIP. Open de bestanden in je slicer.
 
-> **Let op:** controleer de STL-bestanden en afmetingen altijd in je slicer voordat je gaat printen. De werkelijke passing hangt ook af van je printer, materiaal en kalibratie. Het berekende materiaalgewicht is het geometrische volume van massieve wanden en bodem; infill, support en printverlies zijn niet meegenomen.
+> **Let op:** controleer de STL-bestanden en afmetingen altijd in je slicer voordat je gaat printen. De werkelijke passing hangt ook af van je printer, materiaal en kalibratie. Het berekende materiaalgewicht is het geometrische volume van massieve wanden en bodem; infill, support en printverlies zijn niet meegenomen. Printtijden zijn ruwe indicaties: laaghoogte, printer, snelheid, infill en slicerinstellingen zijn niet gemodelleerd.
 
 ## Huidige status
 

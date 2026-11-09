@@ -6,6 +6,7 @@ import {exportAllBins,exportOneBin} from "@/lib/export-all";
 import {fitBinSize,type SizingAxis} from "@/lib/size-bin";
 import {parseSizeInput} from "@/lib/parse-size";
 import {estimateDrawerMaterial,PETG_DENSITY_G_CM3,MATERIAL_EUR_PER_GRAM} from "@/lib/material-estimate";
+import {estimateDrawerPrintTime,formatPrintMinutes} from "@/lib/print-time";
 import {previewBin} from "@/lib/preview";
 import {getCellCorners,moveCellCorner,CornerName,getCellSides,moveCellSide,CellSideName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
@@ -34,6 +35,11 @@ export default function Designer(){
  const svgRef=useRef<SVGSVGElement>(null);
  const error=validateSettings(settings)||validateLayout(bins,settings);
  const densityError=!Number.isFinite(petgDensity)||petgDensity<=0?"Voer een geldige PETG-dichtheid boven 0 g/cm³ in.":null;
+ const printTime=useMemo(()=>{
+  if(error)return null;
+  try{return estimateDrawerPrintTime(bins,settings);}
+  catch{return null;}
+ },[bins,settings,error]);
  const estimate=useMemo(()=>{
   if(error||densityError)return null;
   try{return estimateDrawerMaterial(bins,settings,petgDensity);}
@@ -298,7 +304,12 @@ export default function Designer(){
       <strong>{euro(estimate.euros)}</strong>
       <span>{grams(estimate.grams)} g PETG · {grams(estimate.volumeCm3)} cm³ · {bins.length} bakjes</span>
     </div>:<p className="validation-error" role="status">{densityError||error||"Kan de materiaalraming niet berekenen."}</p>}
-    <p className="hint">Berekend als massieve bodem en wanden: buitenvolume minus de open binnenruimte, inclusief hoekafronding. Dit is een schatting op basis van de geometrie, niet het exacte slicerverbruik. Infill, support en printverlies zijn niet meegerekend.</p>
+    <div className="printtime-summary">
+      <span>Totale geschatte printtijd</span>
+      <strong>{printTime?formatPrintMinutes(printTime.minutes):"–"}</strong>
+      <span>Referentie: 200 × 200 × 55 mm = 6u 30m. Geschat naar verhouding van het materiaalvolume.</span>
+    </div>
+    <p className="hint">Berekend als massieve bodem en wanden: buitenvolume minus de open binnenruimte, inclusief hoekafronding. Dit is een schatting op basis van de geometrie, niet het exacte slicerverbruik. Infill, support en printverlies zijn niet meegerekend. De printtijd is een grove schatting: printersnelheid, laaghoogte, infill en slicerinstellingen kunnen het resultaat sterk beïnvloeden.</p>
   </section>
   <section className="panel"><h2>Bakjes downloaden</h2>
     <p className="hint">Download één bakje tegelijk, handig op je telefoon, of download alles als ZIP.</p>
@@ -310,6 +321,7 @@ export default function Designer(){
             <strong>Bakje B{index+1}</strong>
             <span>{fmt(dimensions.width)} × {fmt(dimensions.depth)} × {fmt(dimensions.height)} mm</span>
             {estimate?.items[index]&&<span className="material-bin-cost">{grams(estimate.items[index].grams)} g PETG · {euro(estimate.items[index].euros)}</span>}
+            {printTime?.items[index]!==undefined&&<span className="printtime-bin">Printtijd ± {formatPrintMinutes(printTime.items[index])}</span>}
           </div>
           <button type="button" aria-label={`Download STL van bakje B${index+1}`}
             onClick={()=>downloadOne(index)} disabled={!!error}>STL ↓</button>

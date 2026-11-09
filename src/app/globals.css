@@ -58,3 +58,10 @@
 .material-total strong{font-size:clamp(23px,3vw,30px);color:#71f3d6}
 .material-total span:last-child{font-size:12px;color:#c7e5df}
 .material-bin-cost{color:#7ce7d1!important;font-weight:700}
+
+/* Calibrated print-time estimates, secondary to PETG cost */
+.printtime-summary{display:grid;gap:5px;margin-top:12px;padding:14px;border:1px solid #36566d;border-radius:12px;background:#0e2536}
+.printtime-summary span:first-child{font-size:13px;color:#c4dce8}
+.printtime-summary strong{font-size:clamp(20px,2.5vw,26px);color:#ebf7ff}
+.printtime-summary span:last-child{font-size:12px;color:#abc4d2;line-height:1.5}
+.printtime-bin{color:#c5dce7!important;font-size:12px}
