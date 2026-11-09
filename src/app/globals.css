@@ -44,3 +44,9 @@
 .bin-download-info span{color:#a8c0cd;font-size:12px;overflow-wrap:anywhere}
 .bin-download-row button{flex:none;min-width:88px;min-height:44px;color:#08322e;background:#48d7bc;border-color:#48d7bc}
 @media(max-width:500px){.bin-download-row{padding:9px}.bin-download-info{font-size:13px}.bin-download-row button{min-width:80px}}
+
+/* Numeric dimensions have an explicit touch-friendly commit action. */
+.size-entry{display:grid;grid-template-columns:1fr;gap:7px;min-width:0}
+.size-entry input{font-size:16px;min-width:0;min-height:44px;background:#0b1b2a;color:#fff;border:1px solid #405d70;border-radius:9px;padding:10px}
+.size-entry input:focus{outline:2px solid #38ccb0}
+.size-entry button{min-height:44px;background:#28675f;border-color:#46cbb4}
