@@ -77,20 +77,31 @@ export default function Designer(){
     </g>)}
     {boundaries.map(edge=>{
       const vertical=edge.axis==="vertical";
-      return <g key={edge.id}><line className="boundary-guide" aria-hidden="true" pointerEvents="none" 
-        x1={edge.x*scale} y1={edge.y*scale} x2={(edge.x+(vertical?0:edge.length))*scale} y2={(edge.y+(vertical?edge.length:0))*scale}/> 
-      <line className="drag-boundary"
-        x1={edge.x*scale} y1={edge.y*scale} x2={(edge.x+(vertical?0:edge.length))*scale} y2={(edge.y+(vertical?edge.length:0))*scale}
-        role="slider" tabIndex={0} aria-label={vertical?"Verticale scheidingsrand verslepen":"Horizontale scheidingsrand verslepen"}
-        aria-valuemin={0} aria-valuemax={vertical?settings.width:settings.depth} aria-valuenow={vertical?edge.x:edge.y}
-        onPointerDown={e=>startDrag(e,edge)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
-        onLostPointerCapture={()=>{dragRef.current=null;setDragging(false);}}
-        onKeyDown={e=>nudge(e,edge)}/></g>;
+      return <g key={edge.id}>{edge.segments.map((segment,index)=>{
+        const x1=(vertical?edge.x:segment.start)*scale;
+        const y1=(vertical?segment.start:edge.y)*scale;
+        const x2=(vertical?edge.x:segment.end)*scale;
+        const y2=(vertical?segment.end:edge.y)*scale;
+        return <g key={index}>
+          <line className="boundary-guide" aria-hidden="true" pointerEvents="none"
+            x1={x1} y1={y1} x2={x2} y2={y2}/>
+          <line className="drag-boundary" x1={x1} y1={y1} x2={x2} y2={y2}
+            role="slider" tabIndex={0}
+            aria-label={vertical?"Verticale scheidingsrand verslepen":"Horizontale scheidingsrand verslepen"}
+            aria-valuemin={0} aria-valuemax={vertical?settings.width:settings.depth}
+            aria-valuenow={vertical?edge.x:edge.y}
+            onPointerDown={e=>startDrag(e,edge)}
+            onPointerMove={moveDrag} onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+            onLostPointerCapture={()=>{dragRef.current=null;setDragging(false);}}
+            onKeyDown={e=>nudge(e,edge)}/>
+        </g>;
+      })}</g>;
     })}</svg></div>
     {error&&<p className="validation-error" role="alert"><strong>Controleer je instellingen:</strong> {error}</p>}
   <div className="preview-legend"><span><i className="legend-outline"/> Bakjes met echte buitenmaat, hoekradius en wanddikte</span><span><i className="legend-gap"/> Vrije ruimte door buitenmarge en tussenruimte</span></div>
   <div className="actions"><button onClick={()=>split("vertical")} disabled={!!error}>↔ Verticaal splitsen</button><button onClick={()=>split("horizontal")} disabled={!!error}>↕ Horizontaal splitsen</button><button onClick={merge} disabled={!!error||(!secondary&&selected.length!==2)}>Vakken samenvoegen</button><button onClick={()=>{setBins(makeGrid(settings.width,settings.depth));setSelected(["bin-0"]);setSecondary("");setMessage("3 × 2 raster hersteld.")}} disabled={!!validateSettings(settings)}>Herstel 3 × 2</button></div>
-  <p className="hint">Sleep een turquoise scheidingsrand om de bakjes erlangs groter of kleiner te maken, ook bij T-verbindingen. Op mobiel werkt dit met je vinger. Met de pijltjestoetsen kun je een geselecteerde rand per 1 mm verplaatsen (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
+  <p className="hint">Sleep een turquoise scheidingsrand om de bakjes erlangs groter of kleiner te maken, ook bij T-verbindingen. Randen stoppen bij andere scheidingslijnen in plaats van erdoorheen te schuiven. Op mobiel werkt dit met je vinger. Met de pijltjestoetsen kun je een geselecteerde rand per 1 mm verplaatsen (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
   <label className="field">Tweede vak selecteren (mobiel)<select value={secondary} onChange={e=>setSecondary(e.target.value)} style={{background:"#0b1b2a",color:"white",padding:10,borderRadius:8,border:"1px solid #405d70"}}><option value="">Geen</option>{bins.filter(v=>v.id!==current.id).map(v=><option key={v.id} value={v.id}>Vak {bins.indexOf(v)+1}</option>)}</select></label></section>
   <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Scheidingsranden kun je verslepen. De tekening toont de echte buitenmaten, wanddikte, ronde hoeken en vrije ruimtes van de te printen bakjes.</p></section>
   <section className="panel"><h2>Geselecteerd bakje</h2>{shape&&<><div className="metrics"><span>Breedte</span><strong>{fmt(shape.width)} mm</strong></div><div className="metrics"><span>Diepte</span><strong>{fmt(shape.depth)} mm</strong></div><div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div><div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div>
