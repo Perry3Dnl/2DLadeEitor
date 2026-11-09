@@ -37,7 +37,7 @@ export function moveCellCorner(bins:Bin[],cellId:string,name:CornerName,dx:numbe
   if(edge)result=moveBoundary(result,edge,dx,s);
  }
  if(corner.horizontalId&&dy!==0){
-  const edge=findBoundaries(result).find(e=>e.id===corner.horizontalId);
+  // The first axis may create a T junction and change the horizontal edge\n  // membership/ID. Resolve it again at the selected corner.\n  const next=getCellCorners(result,cellId).find(c=>c.name===name);\n  const edge=findBoundaries(result).find(e=>e.id===next?.horizontalId);
   if(edge)result=moveBoundary(result,edge,dy,s);
  }
  return validateLayout(result,s)?bins:result;
