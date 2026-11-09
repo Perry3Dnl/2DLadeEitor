@@ -4,6 +4,7 @@ import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEve
 import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
 import {exportAllBins,exportOneBin} from "@/lib/export-all";
 import {fitBinSize,type SizingAxis} from "@/lib/size-bin";
+import {parseSizeInput} from "@/lib/parse-size";
 import {previewBin} from "@/lib/preview";
 import {getCellCorners,moveCellCorner,CornerName,getCellSides,moveCellSide,CellSideName} from "@/lib/corners";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
@@ -138,15 +139,14 @@ export default function Designer(){
  }
  function commitBinSize(axis:SizingAxis,draft:string){
   dirtySizeRef.current[axis]=false;
-  const value=draft.trim().replace(",",".");
   const reset=()=>{const currentShape=physicalBin(current,settings);
    if(axis==="width")setWidthDraft(fmt(currentShape.width));
    else setDepthDraft(fmt(currentShape.depth));
   };
-  if(!/^\d+(?:\.\d+)?$/.test(value)){
+  const requested=parseSizeInput(draft);
+  if(requested===null){
    reset();setMessage("Vul een geldige maat in millimeters in, bijvoorbeeld 175,5.");return;
   }
-  const requested=Number(value);
   try{
    const result=fitBinSize(bins,current.id,axis,requested,settings);
    if(result.changed)setBins(result.bins);
