@@ -91,6 +91,7 @@ export function moveBoundary(bins:Bin[],edge:Boundary,delta:number,s:Settings):B
  if(!Number.isFinite(delta))return bins;
  const fresh=findBoundaries(bins).find(e=>e.id===edge.id&&e.axis===edge.axis);
  if(!fresh)return bins;
+ const axis=fresh.axis;
  const first=new Set(fresh.firstIds),second=new Set(fresh.secondIds);
  // Every affected bin must stay at least 30mm on the changing axis.
  const dimension=fresh.axis==="vertical"?"width":"depth";
@@ -100,7 +101,7 @@ export function moveBoundary(bins:Bin[],edge:Boundary,delta:number,s:Settings):B
  function candidate(amount:number):Bin[]{
   return bins.map(b=>{
    if(first.has(b.id))return {...b,[dimension]:r(b[dimension]+amount)};
-   if(second.has(b.id))return fresh.axis==="vertical"?
+   if(second.has(b.id))return axis==="vertical"?
     {...b,x:r(b.x+amount),width:r(b.width-amount)}:
     {...b,y:r(b.y+amount),depth:r(b.depth-amount)};
    return b;
