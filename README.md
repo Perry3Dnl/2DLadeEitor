@@ -2,7 +2,7 @@
 
 **Ontwerp een lade-indeling op maat en download losse, 3D-printbare bakjes als STL.**
 
-2DLadeEitor is een gebruiksvriendelijke webapp voor iedereen die zijn lades netjes wil indelen met zelfgeprinte organizers. Vul de afmetingen van je lade in, kies een indeling, pas de vakken aan en download een STL-bestand voor elk afzonderlijk bakje. De app werkt op zowel telefoon als computer, zonder dat je een 3D-model hoeft te bekijken of ingewikkelde CAD-software nodig hebt.
+2DLadeEitor is een gebruiksvriendelijke webapp voor iedereen die zijn lades netjes wil indelen met zelfgeprinte organizers. Vul de afmetingen van je lade in, kies een indeling, pas de vakken aan en download alle losse STL-bestanden tegelijk in één ZIP-archief. De app werkt op zowel telefoon als computer, zonder dat je een 3D-model hoeft te bekijken of ingewikkelde CAD-software nodig hebt.
 
 ## Wat kun je ermee?
 
@@ -10,7 +10,7 @@
 - **Nauwkeurige 2D-indeling:** zie echte bakjesafmetingen, wanddikte, ronde hoeken en vrije ruimtes direct mee veranderen met de instellingen.
 - **Vakken aanpassen:** selecteer een vak, controleer de randen en versleep de randen of hoekpunten met muis of vinger. Splits of combineer rechthoekige vakken.
 - **Printinstellingen:** stel wanddikte, bodemdikte, hoekafronding en pasruimte in.
-- **Losse STL-bakjes:** download per vak een eigen bestand voor je slicer.
+- **Alle STL-bakjes in één ZIP:** download één ZIP met voor ieder vak een afzonderlijk STL-bestand, direct te gebruiken in je slicer.
 - **Ontwerp bewaren:** sla je huidige indeling op als JSON-bestand.
 - **Mobiel én desktop:** gebruik de ontwerper op het scherm dat je bij de hand hebt.
 
@@ -20,13 +20,13 @@
 2. Begin met de automatisch voorgestelde indeling.
 3. Selecteer een vak. Versleep de turquoise randen of hoekpunten om de aangrenzende vakken aan te passen, of splits en combineer vakken.
 4. Stel de gewenste hoogte en printinstellingen in.
-5. Download de afzonderlijke STL-bestanden en open ze in je slicer.
+5. Download alle bakjes als ZIP, pak de STL-bestanden uit en open ze in je slicer.
 
 > **Let op:** controleer de STL-bestanden en afmetingen altijd in je slicer voordat je gaat printen. De werkelijke passing hangt ook af van je printer, materiaal en kalibratie.
 
 ## Huidige status
 
-2DLadeEitor is in **actieve ontwikkeling**. De eerste MVP bevat de 2D-weergave, basisbewerkingen voor vakken, maatinstellingen, individuele STL-export en het bewaren van een ontwerp.
+2DLadeEitor is in **actieve ontwikkeling**. De eerste MVP bevat de 2D-weergave, basisbewerkingen voor vakken, maatinstellingen, ZIP-export met alle individuele STL-bestanden en het bewaren van een ontwerp.
 
 ## Wat staat er op de planning?
 
