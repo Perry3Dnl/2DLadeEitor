@@ -74,7 +74,9 @@ export default function Designer(){
     </g>)}
     {boundaries.map(edge=>{
       const vertical=edge.axis==="vertical";
-      return <g key={edge.id}><line className="boundary-guide" aria-hidden="true" pointerEvents="none"\n        x1={edge.x*scale} y1={edge.y*scale} x2={(edge.x+(vertical?0:edge.length))*scale} y2={(edge.y+(vertical?edge.length:0))*scale}/>\n      <line className="drag-boundary"
+      return <g key={edge.id}><line className="boundary-guide" aria-hidden="true" pointerEvents="none" 
+        x1={edge.x*scale} y1={edge.y*scale} x2={(edge.x+(vertical?0:edge.length))*scale} y2={(edge.y+(vertical?edge.length:0))*scale}/> 
+      <line className="drag-boundary"
         x1={edge.x*scale} y1={edge.y*scale} x2={(edge.x+(vertical?0:edge.length))*scale} y2={(edge.y+(vertical?edge.length:0))*scale}
         role="slider" tabIndex={0} aria-label={vertical?"Verticale scheidingsrand verslepen":"Horizontale scheidingsrand verslepen"}
         aria-valuemin={0} aria-valuemax={vertical?settings.width:settings.depth} aria-valuenow={vertical?edge.x:edge.y}
