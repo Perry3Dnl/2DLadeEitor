@@ -8,7 +8,7 @@
 
 - **Lade op maat:** stel breedte, diepte en bakjehoogte in millimeters in.
 - **Duidelijke 2D-indeling:** bekijk direct hoe de vakken in je lade passen.
-- **Vakken aanpassen:** selecteer, splits en combineer rechthoekige vakken.
+- **Vakken aanpassen:** versleep scheidingsranden met muis of vinger, of selecteer, splits en combineer rechthoekige vakken.
 - **Printinstellingen:** stel wanddikte, bodemdikte, hoekafronding en pasruimte in.
 - **Losse STL-bakjes:** download per vak een eigen bestand voor je slicer.
 - **Ontwerp bewaren:** sla je huidige indeling op als JSON-bestand.
@@ -30,7 +30,7 @@
 
 ## Wat staat er op de planning?
 
-- Scheidingslijnen direct verslepen met muis of vinger.
+- Meer complexe scheidingsranden en T-verbindingen interactief kunnen verschuiven.
 - Alle bakjes tegelijk downloaden als ZIP.
 - Eerder bewaarde ontwerpen weer openen.
 - Uitgebreide printbedcontrole en extra exportvalidatie.
