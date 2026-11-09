@@ -50,3 +50,11 @@
 .size-entry input{font-size:16px;min-width:0;min-height:44px;background:#0b1b2a;color:#fff;border:1px solid #405d70;border-radius:9px;padding:10px}
 .size-entry input:focus{outline:2px solid #38ccb0}
 .size-entry button{min-height:44px;background:#28675f;border-color:#46cbb4}
+
+/* PETG material estimate and per-bin costs */
+.material-fixed-price{display:flex;align-items:center;min-height:40px;font-size:16px;font-weight:700;color:#c2f7e8}
+.material-total{display:grid;gap:5px;padding:16px;border:1px solid #317a70;background:#103532;border-radius:12px;margin-top:16px}
+.material-total span:first-child{font-size:13px;color:#b4e4d8}
+.material-total strong{font-size:clamp(23px,3vw,30px);color:#71f3d6}
+.material-total span:last-child{font-size:12px;color:#c7e5df}
+.material-bin-cost{color:#7ce7d1!important;font-weight:700}

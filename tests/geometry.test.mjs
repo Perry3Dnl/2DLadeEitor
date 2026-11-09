@@ -10,6 +10,7 @@ import {createZip} from "../src/lib/zip.ts";
 import {exportOneBin} from "../src/lib/export-all.ts";
 import {fitBinSize} from "../src/lib/size-bin.ts";
 import {parseSizeInput} from "../src/lib/parse-size.ts";
+import {roundedRectangleArea,estimateBinMaterial,estimateDrawerMaterial,PETG_DENSITY_G_CM3,MATERIAL_EUR_PER_GRAM} from "../src/lib/material-estimate.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -416,4 +417,61 @@ test("submitted text dimension changes actual rendered and exportable bin geomet
   const one=exportOneBin(result.bins,defaults,0);
   assert.ok(one.data.byteLength>84);
  }
+});
+
+test("square PETG tray volume subtracts the complete inner cavity above the solid floor",()=>{
+ const bin={width:100,depth:80,height:40,wall:2,floor:3,radius:0};
+ const expectedMm3=100*80*40-(100-4)*(80-4)*(40-3);
+ const estimated=estimateBinMaterial(bin);
+ assert.equal(expectedMm3,50048);
+ assert.ok(Math.abs(estimated.volumeMm3-expectedMm3)<1e-9);
+ assert.ok(Math.abs(estimated.volumeCm3-50.048)<1e-9);
+ assert.ok(Math.abs(estimated.grams-50.048*1.27)<1e-9);
+ assert.ok(Math.abs(estimated.euros-50.048*1.27*.015)<1e-9);
+});
+test("rounded corners alter both outer and inner area and match the STL inner radius",()=>{
+ const bin={width:100,depth:80,height:40,wall:2,floor:3,radius:10};
+ const insideRadius=8;
+ const outer=roundedRectangleArea(100,80,10);
+ const inner=roundedRectangleArea(96,76,insideRadius);
+ const expected=outer*40-inner*37;
+ const actual=estimateBinMaterial(bin);
+ assert.ok(Math.abs(actual.volumeMm3-expected)<1e-8);
+ assert.ok(actual.volumeMm3<estimateBinMaterial({...bin,radius:0}).volumeMm3);
+ const mesh=createBinTriangles(bin);
+ assert.ok(mesh.length>100);
+});
+test("PETG estimate uses settable density but fixed 1.5 cent rate and sum is consistent",()=>{
+ assert.equal(PETG_DENSITY_G_CM3,1.27);
+ assert.equal(MATERIAL_EUR_PER_GRAM,.015);
+ const bins=makeGrid(600,400);
+ const total=estimateDrawerMaterial(bins,defaults);
+ assert.equal(total.items.length,6);
+ assert.ok(total.grams>0&&total.euros>0);
+ assert.ok(Math.abs(total.grams-total.items.reduce((n,i)=>n+i.grams,0))<1e-9);
+ assert.ok(Math.abs(total.euros-total.grams*.015)<1e-9);
+ const dense=estimateDrawerMaterial(bins,defaults,1.5);
+ assert.ok(Math.abs(dense.grams/total.grams-1.5/1.27)<1e-9);
+});
+test("material and price recalculate when height, walls, floor, radius or compartment layout changes",()=>{
+ const b=makeGrid(600,400),base=estimateDrawerMaterial(b,defaults);
+ for(const settings of [{...defaults,height:70},{...defaults,wall:3},{...defaults,floor:3.2},{...defaults,radius:20}]){
+  const changed=estimateDrawerMaterial(b,settings);
+  assert.notEqual(changed.volumeCm3,base.volumeCm3);
+ }
+ const resized=fitBinSize(b,b[0].id,"width",175.5,defaults).bins;
+ const revised=estimateDrawerMaterial(resized,defaults);
+ assert.equal(validateLayout(resized,defaults),null);
+ assert.notEqual(revised.volumeCm3,base.volumeCm3);
+ const merged=mergeBins(b,b[0].id,b[1].id);
+ assert.ok(merged);
+ assert.equal(estimateDrawerMaterial(merged,defaults).items.length,5);
+});
+test("invalid PETG density or geometry never gives misleading cost values",()=>{
+ const shape={width:100,depth:80,height:40,wall:2,floor:3,radius:5};
+ assert.throws(()=>estimateBinMaterial(shape,0),/Ongeldige/);
+ assert.throws(()=>estimateBinMaterial(shape,Number.NaN),/Ongeldige/);
+ assert.throws(()=>estimateBinMaterial({...shape,width:3}),/Ongeldige/);
+ assert.throws(()=>roundedRectangleArea(50,30,40),/Ongeldige/);
+ assert.throws(()=>estimateBinMaterial(shape,1.27,-.01),/Ongeldige/);
 });
