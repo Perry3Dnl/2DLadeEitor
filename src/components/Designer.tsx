@@ -1,7 +1,7 @@
 "use client";
 import { useMemo,useState,useRef } from "react";
 import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent} from "react";
-import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout,findBoundaries} from "@/lib/layout";
+import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
 import {downloadSTL,createBinTriangles} from "@/lib/stl";
 import {previewBin} from "@/lib/preview";
 import {getCellCorners,moveCellCorner,CornerName} from "@/lib/corners";
