@@ -1,4 +1,4 @@
-import type {Bin,Settings} from "./layout";
+import type {Bin,Settings} from "./layout.ts";
 import {physicalBin} from "./layout";
 
 /** Geometry for the actual printed object, in drawer mm (not pixels). */
