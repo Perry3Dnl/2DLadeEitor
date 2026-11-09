@@ -2,6 +2,7 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import {makeGrid,splitBin,mergeBins,physicalBin,defaults,validateLayout,validateSettings,findBoundaries,moveBoundary} from "../src/lib/layout.ts";
 import {createBinTriangles,binarySTL} from "../src/lib/stl.ts";
+import {previewBin} from "../src/lib/preview.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -76,4 +77,35 @@ test("T-junction: all discovered handles preserve valid layouts under extreme mo
    assert.equal(updated.length,right.length);
   }
  }
+});
+
+test("preview reflects exact print footprint, gap and margin, not compartment dimensions",()=>{
+ const bins=makeGrid(600,400),first=previewBin(bins[0],defaults);
+ assert.equal(first.x,1);assert.equal(first.y,1);
+ assert.equal(first.width,198.7);assert.equal(first.depth,198.7);
+ assert.equal(first.inner.width,194.7);assert.equal(first.inner.depth,194.7);
+ const other=previewBin(bins[1],defaults);
+ assert.equal(other.x,200.3);
+ assert.ok(Math.abs(other.x-(first.x+first.width)-defaults.gap)<1e-5);
+});
+test("preview changes with every relevant geometry setting",()=>{
+ const bin=makeGrid(600,400)[0],a=previewBin(bin,defaults);
+ assert.equal(previewBin(bin,{...defaults,radius:35}).radius,35);
+ assert.equal(previewBin(bin,{...defaults,radius:0}).inner.radius,0);
+ assert.equal(previewBin(bin,{...defaults,wall:10}).inner.width,a.inner.width-16);
+ assert.equal(previewBin(bin,{...defaults,gap:20}).width,a.width-9.7);
+ assert.equal(previewBin(bin,{...defaults,clearance:5}).x,5);
+ assert.equal(previewBin(bin,{...defaults,height:80}).height,80);
+ assert.equal(previewBin(bin,{...defaults,floor:4}).floor,4);
+});
+test("preview stays accurate after dragging and splitting",()=>{
+ const bins=makeGrid(600,400);
+ const boundary=findBoundaries(bins).find(e=>e.axis==="vertical"&&e.x===200);
+ assert.ok(boundary);
+ const moved=moveBoundary(bins,boundary,20,defaults);
+ assert.equal(validateLayout(moved,defaults),null);
+ const preview=previewBin(moved[0],defaults),physical=physicalBin(moved[0],defaults);
+ assert.equal(preview.width,physical.width);
+ assert.equal(preview.depth,physical.depth);
+ assert.equal(preview.radius,physical.radius);
 });
