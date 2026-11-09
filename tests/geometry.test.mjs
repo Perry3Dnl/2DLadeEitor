@@ -12,3 +12,68 @@ test("0 mm corner radius means square edges and valid STL",()=>{const shape={wid
 test("specific validation errors guide users",()=>{assert.match(validateSettings({...defaults,radius:1})||"",/Hoekradius/);assert.match(validateSettings({...defaults,wall:0})||"",/Wanddikte/);assert.match(validateSettings({...defaults,gap:-1})||"",/Tussenruimte/);});
 test("drag horizontal and vertical boundaries preserve total area",()=>{const original=makeGrid(600,400,3,2),edges=findBoundaries(original);assert.equal(edges.filter(e=>e.axis==="vertical").length,4);assert.equal(edges.filter(e=>e.axis==="horizontal").length,3);for(const edge of edges){const result=moveBoundary(original,edge,25,defaults);assert.equal(validateLayout(result,defaults),null);assert.deepEqual(result.filter(b=>![edge.firstId,edge.secondId].includes(b.id)),original.filter(b=>![edge.firstId,edge.secondId].includes(b.id)));const one=result.find(b=>b.id===edge.firstId);assert.ok(one);assert.notDeepEqual(one,original.find(b=>b.id===edge.firstId));}});
 test("drag limits clamp and never create negative or overlapping bins",()=>{const original=makeGrid(600,400);const edge=findBoundaries(original)[0];const result=moveBoundary(original,edge,100000,defaults);assert.equal(validateLayout(result,defaults),null);assert.ok(result.every(b=>b.width>=30&&b.depth>=30));assert.equal(moveBoundary(original,edge,Number.NaN,defaults),original);});
+
+test("T-junction: dragging middle vertical boundary updates all touching bins",()=>{
+ const s={...defaults,width:600,depth:400};
+ const b=[
+  {id:"A",x:0,y:0,width:200,depth:247.4},
+  {id:"B",x:200,y:0,width:259.3,depth:200},
+  {id:"C",x:459.3,y:0,width:140.7,depth:200},
+  {id:"D",x:0,y:247.4,width:200,depth:152.6},
+  {id:"E",x:200,y:200,width:125.4,depth:200},
+  {id:"F",x:325.4,y:200,width:274.6,depth:200}
+ ];
+ assert.equal(validateLayout(b,s),null);
+ const edges=findBoundaries(b);
+ const central=edges.find(e=>e.axis==="vertical"&&Math.abs(e.x-200)<.002);
+ assert.ok(central);
+ assert.deepEqual(central.firstIds,["A","D"]);
+ assert.deepEqual(central.secondIds,["B","E"]);
+ assert.equal(central.length,400);
+ const updated=moveBoundary(b,central,25,s);
+ assert.equal(validateLayout(updated,s),null);
+ assert.equal(updated.find(v=>v.id==="A").width,225);
+ assert.equal(updated.find(v=>v.id==="D").width,225);
+ assert.equal(updated.find(v=>v.id==="B").x,225);
+ assert.equal(updated.find(v=>v.id==="E").x,225);
+ assert.deepEqual(updated.find(v=>v.id==="C"),b[2]);
+ assert.deepEqual(updated.find(v=>v.id==="F"),b[5]);
+ const after=findBoundaries(updated);
+ assert.ok(after.some(e=>e.id===central.id&&Math.abs(e.x-225)<.002));
+});
+test("T-junction: horizontal boundary resizes mismatched columns together",()=>{
+ const s={...defaults,width:600,depth:400};
+ const b=[
+  {id:"A",x:0,y:0,width:200,depth:247.4},
+  {id:"B",x:200,y:0,width:259.3,depth:200},
+  {id:"C",x:459.3,y:0,width:140.7,depth:200},
+  {id:"D",x:0,y:247.4,width:200,depth:152.6},
+  {id:"E",x:200,y:200,width:125.4,depth:200},
+  {id:"F",x:325.4,y:200,width:274.6,depth:200}
+ ];
+ const edge=findBoundaries(b).find(e=>e.axis==="horizontal"&&Math.abs(e.y-200)<.002);
+ assert.ok(edge);
+ assert.deepEqual(edge.firstIds,["B","C"]);
+ assert.deepEqual(edge.secondIds,["E","F"]);
+ assert.equal(edge.length,400);
+ const next=moveBoundary(b,edge,40,s);
+ assert.equal(validateLayout(next,s),null);
+ for(const id of ["B","C"])assert.equal(next.find(v=>v.id===id).depth,240);
+ for(const id of ["E","F"])assert.equal(next.find(v=>v.id===id).y,240);
+ assert.deepEqual(next.find(v=>v.id==="A"),b[0]);
+ assert.deepEqual(next.find(v=>v.id==="D"),b[3]);
+});
+test("T-junction: all discovered handles preserve valid layouts under extreme moves",()=>{
+ const s={...defaults,width:600,depth:400};
+ const first=makeGrid(600,400);
+ const top=moveBoundary(first,findBoundaries(first).find(e=>e.axis==="horizontal"&&e.x===0),47.4,s);
+ const right=moveBoundary(top,findBoundaries(top).find(e=>e.axis==="vertical"&&e.x===400&&e.y===0),59.3,s);
+ assert.equal(validateLayout(right,s),null);
+ for(const edge of findBoundaries(right)){
+  for(const delta of [-10000,-28,28,10000]){
+   const updated=moveBoundary(right,edge,delta,s);
+   assert.equal(validateLayout(updated,s),null,edge.id+" delta "+delta);
+   assert.equal(updated.length,right.length);
+  }
+ }
+});

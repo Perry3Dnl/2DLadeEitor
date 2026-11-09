@@ -30,7 +30,6 @@
 
 ## Wat staat er op de planning?
 
-- Meer complexe scheidingsranden en T-verbindingen interactief kunnen verschuiven.
 - Alle bakjes tegelijk downloaden als ZIP.
 - Eerder bewaarde ontwerpen weer openen.
 - Uitgebreide printbedcontrole en extra exportvalidatie.
