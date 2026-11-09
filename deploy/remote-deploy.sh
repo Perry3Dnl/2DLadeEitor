@@ -23,7 +23,20 @@ fi
 tar -xzf source.tar.gz
 docker compose config --quiet
 docker compose up -d --build web
-curl --fail --silent --show-error http://127.0.0.1:8097/health >/dev/null
+healthy=false
+for attempt in $(seq 1 30); do
+  if curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8097/health >/dev/null 2>&1; then
+    healthy=true
+    break
+  fi
+  sleep 2
+done
+if [ "$healthy" != true ]; then
+  echo "Health check failed after startup grace period" >&2
+  docker compose ps
+  docker logs --tail=80 2dladeeditor-web || true
+  exit 1
+fi
 backup="$caddy_file.2dladeeditor-$(date +%Y%m%d%H%M%S).bak"
 cp -p "$caddy_file" "$backup"
 python3 - "$caddy_file" <<'PY'
