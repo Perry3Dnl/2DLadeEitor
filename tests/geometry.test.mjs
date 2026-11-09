@@ -4,6 +4,9 @@ import {makeGrid,splitBin,mergeBins,physicalBin,defaults,validateLayout,validate
 import {createBinTriangles,binarySTL} from "../src/lib/stl.ts";
 import {previewBin} from "../src/lib/preview.ts";
 import {getCellCorners,moveCellCorner,getCellSides,moveCellSide} from "../src/lib/corners.ts";
+import {spawnSync} from "node:child_process";
+import {exportAllBins} from "../src/lib/export-all.ts";
+import {createZip} from "../src/lib/zip.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -267,4 +270,53 @@ test("invalid side moves never change layout",()=>{
  const bins=makeGrid(600,400);
  assert.equal(moveCellSide(bins,bins[0].id,"right",NaN,defaults),bins);
  assert.equal(moveCellSide(bins,"not-found","right",25,defaults),bins);
+});
+
+test("all bins ZIP opens with Python standard zipfile and contains one valid binary STL per bin",()=>{
+ const bins=makeGrid(600,400);
+ const {zip,names}=exportAllBins(bins,defaults);
+ assert.equal(names.length,6);
+ assert.equal(new Set(names).size,6);
+ assert.ok(names.every(name=>name.endsWith(".stl")&&!name.includes("/")));
+ const python=`import io,json,struct,sys,zipfile
+data=sys.stdin.buffer.read()
+with zipfile.ZipFile(io.BytesIO(data)) as z:
+    assert z.testzip() is None
+    names=z.namelist()
+    assert len(names)==6
+    assert len(names)==len(set(names))
+    for name in names:
+        stl=z.read(name)
+        assert name.endswith('.stl') and '/' not in name
+        assert stl.startswith(b'2DLadeEditor - millimeters')
+        assert len(stl)==84+struct.unpack_from('<I',stl,80)[0]*50
+    print(json.dumps(names))
+`;
+ const output=spawnSync("python3",["-c",python],{input:Buffer.from(zip),encoding:"utf8"});
+ assert.equal(output.status,0,output.stderr||"Python ZIP validation failed");
+ assert.deepEqual(JSON.parse(output.stdout.trim()),names);
+});
+test("ZIP export always follows final resized/split compartment dimensions",()=>{
+ const one=makeGrid(600,400,1,1);
+ const split=splitBin(one,one[0].id,"vertical");
+ assert.ok(split);
+ const moved=moveCellSide(split,split[0].id,"right",35,defaults);
+ assert.equal(validateLayout(moved,defaults),null);
+ const {zip,names}=exportAllBins(moved,defaults);
+ assert.equal(names.length,2);
+ assert.notEqual(names[0],names[1]);
+ for(let i=0;i<moved.length;i++){
+  const shape=physicalBin(moved[i],defaults);
+  assert.ok(names[i].includes([shape.width,shape.depth,shape.height].map(v=>v.toFixed(1)).join("x")));
+ }
+ assert.equal(new DataView(zip).getUint32(0,true),0x04034b50);
+ const end=new DataView(zip,zip.byteLength-22);
+ assert.equal(end.getUint32(0,true),0x06054b50);
+ assert.equal(end.getUint16(10,true),2);
+});
+test("ZIP rejects missing bins and duplicate names instead of producing invalid downloads",()=>{
+ assert.throws(()=>exportAllBins([],defaults),/Ongeldig aantal vakken/);
+ assert.throws(()=>createZip([]),/geen bakjes/);
+ assert.throws(()=>createZip([{name:"B1.stl",data:new ArrayBuffer(2)},{name:"B1.stl",data:new ArrayBuffer(3)}]),/Dubbele/);
+ assert.throws(()=>createZip([{name:"wrong/bakje.stl",data:new ArrayBuffer(0)}]),/Ongeldige/);
 });
