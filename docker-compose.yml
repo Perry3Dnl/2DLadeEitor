@@ -1,0 +1,20 @@
+services:
+  web:
+    image: 2dladeeditor:local
+    build: .
+    container_name: 2dladeeditor-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8097:80"
+    networks:
+      - default
+      - shared_proxy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  shared_proxy:
+    external: true
+    name: dummy-stock-simulator_default
