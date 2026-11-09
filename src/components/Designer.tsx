@@ -1,6 +1,7 @@
 "use client";
-import { useMemo,useState } from "react";
-import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout} from "@/lib/layout";
+import { useMemo,useState,useRef } from "react";
+import type {PointerEvent as ReactPointerEvent,KeyboardEvent as ReactKeyboardEvent} from "react";
+import {Bin,Settings,defaults,makeGrid,splitBin,mergeBins,physicalBin,validateSettings,validateLayout,findBoundaries,moveBoundary,Boundary} from "@/lib/layout";
 import {downloadSTL,createBinTriangles} from "@/lib/stl";
 const fmt=(v:number)=>Number.isFinite(v)?v.toFixed(1).replace(".0",""):"–";
 const fields:{key:keyof Settings;label:string;step:number}[]=[
@@ -15,7 +16,42 @@ export default function Designer(){
  const [selected,setSelected]=useState<string[]>(["bin-0"]);
  const [message,setMessage]=useState("Klik op een vak om het te selecteren. Met Shift+klik selecteer je een tweede vak.");
  const [secondary,setSecondary]=useState("");
+ const [dragging,setDragging]=useState(false);
+ const dragRef=useRef<{edge:Boundary;start:number;bins:Bin[];pointerId:number}|null>(null);
+ const svgRef=useRef<SVGSVGElement>(null);
+ const boundaries=useMemo(()=>findBoundaries(bins),[bins]);
  const error=validateSettings(settings)||validateLayout(bins,settings);
+ function pointerMm(e:ReactPointerEvent<SVGLineElement>,axis:"vertical"|"horizontal"){
+  const matrix=svgRef.current?.getScreenCTM();
+  if(!matrix)return 0;
+  const point=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());
+  return (axis==="vertical"?point.x:point.y)/scale;
+ }
+ function startDrag(e:ReactPointerEvent<SVGLineElement>,edge:Boundary){
+  if(error)return;
+  e.preventDefault();e.stopPropagation();
+  e.currentTarget.setPointerCapture(e.pointerId);
+  dragRef.current={edge,start:pointerMm(e,edge.axis),bins,pointerId:e.pointerId};
+  setDragging(true);
+  setMessage("Versleep de turquoise rand; de aangrenzende bakjes veranderen samen.");
+ }
+ function moveDrag(e:ReactPointerEvent<SVGLineElement>){
+  const drag=dragRef.current;
+  if(!drag||drag.pointerId!==e.pointerId)return;
+  const delta=pointerMm(e,drag.edge.axis)-drag.start;
+  setBins(moveBoundary(drag.bins,drag.edge,delta,settings));
+ }
+ function endDrag(e:ReactPointerEvent<SVGLineElement>){
+  if(dragRef.current?.pointerId!==e.pointerId)return;
+  dragRef.current=null;setDragging(false);
+ }
+ function nudge(e:ReactKeyboardEvent<SVGLineElement>,edge:Boundary){
+  const step=e.shiftKey?5:1;
+  const delta=edge.axis==="vertical"?(e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0):(e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0);
+  if(!delta)return;
+  e.preventDefault();e.stopPropagation();
+  setBins(old=>moveBoundary(old,edge,delta,settings));
+ }
  const current=bins.find(b=>b.id===selected[0])||bins[0];
  const shape=current?physicalBin(current,settings):null;
  const scale=900/Math.max(settings.width,settings.depth,1);
@@ -29,17 +65,28 @@ export default function Designer(){
  return <main className="wrap">
   <header><div><div className="eyebrow">PERRY3D / 3D PRINT TOOL</div><h1>2D Lade Editor</h1><p className="muted">Ontwerp losse bakjes op maat en download elk vak als STL.</p></div><span className="eyebrow">● PRIVÉ IN JE BROWSER</span></header>
   <div className="workspace"><section className="panel"><h2>Jouw lade <small className="muted">· {bins.length} bakjes</small></h2>
-  <div className="canvas">{!error?<svg role="group" aria-label="Indeling van de lade" viewBox={`-18 -18 ${settings.width*scale+36} ${settings.depth*scale+36}`}>
+  <div className={dragging?"canvas is-dragging":"canvas"}><svg ref={svgRef} role="group" aria-label="Indeling van de lade" viewBox={`-18 -18 ${settings.width*scale+36} ${settings.depth*scale+36}`}>
     <rect className="outline" x="0" y="0" width={settings.width*scale} height={settings.depth*scale} rx="5"/>
     {bins.map((b,i)=><g key={b.id} className={active.has(b.id)?"bin active":"bin"} role="button" tabIndex={0} aria-label={`Selecteer vak ${i+1}`} onClick={e=>select(b.id,e.shiftKey)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select(b.id,e.shiftKey)}}}>
       <rect x={b.x*scale+2} y={b.y*scale+2} width={Math.max(1,b.width*scale-4)} height={Math.max(1,b.depth*scale-4)} rx="5"/>
       <text x={(b.x+b.width/2)*scale} y={(b.y+b.depth/2)*scale-7} textAnchor="middle">B{i+1}</text>
       <text x={(b.x+b.width/2)*scale} y={(b.y+b.depth/2)*scale+15} textAnchor="middle" style={{fontSize:13,fontWeight:400}}>{fmt(b.width)} × {fmt(b.depth)}</text>
-    </g>)}</svg>:<p className="error" role="alert">{error}</p>}</div>
+    </g>)}
+    {boundaries.map(edge=>{
+      const vertical=edge.axis==="vertical";
+      return <line key={edge.id} className="drag-boundary"
+        x1={edge.x*scale} y1={edge.y*scale} x2={(edge.x+(vertical?0:edge.length))*scale} y2={(edge.y+(vertical?edge.length:0))*scale}
+        role="slider" tabIndex={0} aria-label={vertical?"Verticale scheidingsrand verslepen":"Horizontale scheidingsrand verslepen"}
+        aria-valuemin={0} aria-valuemax={vertical?settings.width:settings.depth} aria-valuenow={vertical?edge.x:edge.y}
+        onPointerDown={e=>startDrag(e,edge)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+        onLostPointerCapture={()=>{dragRef.current=null;setDragging(false);}}
+        onKeyDown={e=>nudge(e,edge)}/>;
+    })}</svg></div>
+    {error&&<p className="validation-error" role="alert"><strong>Controleer je instellingen:</strong> {error}</p>}
   <div className="actions"><button onClick={()=>split("vertical")} disabled={!!error}>↔ Verticaal splitsen</button><button onClick={()=>split("horizontal")} disabled={!!error}>↕ Horizontaal splitsen</button><button onClick={merge} disabled={!!error||(!secondary&&selected.length!==2)}>Vakken samenvoegen</button><button onClick={()=>{setBins(makeGrid(settings.width,settings.depth));setSelected(["bin-0"]);setSecondary("");setMessage("3 × 2 raster hersteld.")}} disabled={!!validateSettings(settings)}>Herstel 3 × 2</button></div>
-  <p className="hint">Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
+  <p className="hint">Sleep de turquoise scheidingsranden om aangrenzende bakjes groter of kleiner te maken. Op mobiel werkt dit met je vinger. Met de pijltjestoetsen kun je een geselecteerde rand per 1 mm verplaatsen (Shift: 5 mm). Op desktop: Shift+klik om twee vakken te selecteren. Op telefoon: selecteer een vak en kies een tweede hieronder.</p>
   <label className="field">Tweede vak selecteren (mobiel)<select value={secondary} onChange={e=>setSecondary(e.target.value)} style={{background:"#0b1b2a",color:"white",padding:10,borderRadius:8,border:"1px solid #405d70"}}><option value="">Geen</option>{bins.filter(v=>v.id!==current.id).map(v=><option key={v.id} value={v.id}>Vak {bins.indexOf(v)+1}</option>)}</select></label></section>
-  <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Dit is een eerste MVP: het slepen van scheidingslijnen volgt later.</p></section>
+  <aside className="side"><section className="panel"><h2>Afmetingen en printinstellingen</h2><div className="fields">{fields.map(f=><label className="field" key={f.key}>{f.label} (mm)<input type="number" value={settings[f.key]} step={f.step} min="0" onChange={e=>field(f.key,e.target.valueAsNumber)}/></label>)}</div><p className="hint">Wanneer je de ladematen wijzigt wordt de 3 × 2 indeling opnieuw berekend. Scheidingsranden kun je verslepen; beide vakken behouden samen dezelfde ruimte.</p></section>
   <section className="panel"><h2>Geselecteerd bakje</h2>{shape&&<><div className="metrics"><span>Breedte</span><strong>{fmt(shape.width)} mm</strong></div><div className="metrics"><span>Diepte</span><strong>{fmt(shape.depth)} mm</strong></div><div className="metrics"><span>Hoogte</span><strong>{fmt(shape.height)} mm</strong></div><div className="metrics"><span>Wand / bodem</span><strong>{fmt(shape.wall)} / {fmt(shape.floor)} mm</strong></div><button className="primary" onClick={exportSTL} disabled={!!error}>↓ Download STL van dit bakje</button></>}<button style={{width:"100%"}} onClick={save} disabled={!!error}>Bewaar project als JSON</button><p className="alert" role="status">{error||message}</p></section></aside></div>
   <footer>Versie 0.1 · Build {process.env.NEXT_PUBLIC_COMMIT_SHA?.slice(0,8)||"lokaal"} · STL's controleren in de slicer vóór het printen.</footer>
  </main>
