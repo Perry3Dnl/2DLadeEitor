@@ -7,6 +7,8 @@ import {getCellCorners,moveCellCorner,getCellSides,moveCellSide} from "../src/li
 import {spawnSync} from "node:child_process";
 import {exportAllBins} from "../src/lib/export-all.ts";
 import {createZip} from "../src/lib/zip.ts";
+import {exportOneBin} from "../src/lib/export-all.ts";
+import {fitBinSize} from "../src/lib/size-bin.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -319,4 +321,75 @@ test("ZIP rejects missing bins and duplicate names instead of producing invalid 
  assert.throws(()=>createZip([]),/geen bakjes/);
  assert.throws(()=>createZip([{name:"B1.stl",data:new ArrayBuffer(2)},{name:"B1.stl",data:new ArrayBuffer(3)}]),/Dubbele/);
  assert.throws(()=>createZip([{name:"wrong/bakje.stl",data:new ArrayBuffer(0)}]),/Ongeldige/);
+});
+
+test("a requested outer STL width resizes the selected cell to exact target when possible",()=>{
+ const original=makeGrid(600,400);
+ const old=physicalBin(original[0],defaults).width;
+ const result=fitBinSize(original,original[0].id,"width",175.5,defaults);
+ assert.equal(old,198.7);
+ assert.equal(result.actual,175.5);
+ assert.equal(result.adjusted,false);
+ assert.equal(result.changed,true);
+ assert.equal(validateLayout(result.bins,defaults),null);
+ assert.equal(result.bins[0].width,176.8);
+ assert.equal(result.bins[1].x,176.8);
+ assert.equal(result.bins[0].depth,200);
+});
+test("numeric sizing clamps oversized and undersized values rather than invalidating grid",()=>{
+ const original=makeGrid(600,400);
+ const oversized=fitBinSize(original,original[0].id,"width",999999,defaults);
+ assert.equal(validateLayout(oversized.bins,defaults),null);
+ assert.ok(oversized.actual<999999);
+ assert.equal(oversized.adjusted,true);
+ assert.ok(oversized.changed);
+ const tiny=fitBinSize(original,original[0].id,"depth",0,defaults);
+ assert.equal(validateLayout(tiny.bins,defaults),null);
+ assert.ok(tiny.actual>0);
+ assert.equal(tiny.adjusted,true);
+ assert.ok(tiny.changed);
+ assert.throws(()=>fitBinSize(original,"wrong-cell","width",100,defaults),/bestaat niet/);
+});
+
+test("manual sizing respects T junctions, chooses a movable side and preserves all bin coverage",()=>{
+ const original=makeGrid(600,400);
+ const moved=moveCellSide(original,original[0].id,"bottom",47,defaults);
+ assert.equal(validateLayout(moved,defaults),null);
+ const selected=moved[1],requested=physicalBin(selected,defaults).width+55;
+ const result=fitBinSize(moved,selected.id,"width",requested,defaults);
+ assert.equal(validateLayout(result.bins,defaults),null);
+ assert.ok(Math.abs(result.actual-requested)<.1);
+ assert.equal(result.bins.length,moved.length);
+ for(const b of result.bins)assert.ok(b.width>=30&&b.depth>=30);
+});
+test("manual sizing keeps fixed full-drawer cells safe and rejects nonnumeric inputs",()=>{
+ const single=makeGrid(600,400,1,1);
+ const result=fitBinSize(single,single[0].id,"width",350,defaults);
+ assert.equal(result.bins,single);
+ assert.equal(result.adjusted,true);
+ assert.equal(result.changed,false);
+ assert.throws(()=>fitBinSize(single,single[0].id,"width",Number.NaN,defaults),/geldige maat/);
+ assert.throws(()=>fitBinSize(single,single[0].id,"depth",-10,defaults),/geldige maat/);
+});
+test("each individual STL matches the identically named STL inside the all-bin ZIP after numeric resizing",()=>{
+ const original=makeGrid(600,400);
+ const updated=fitBinSize(original,original[0].id,"width",175.5,defaults).bins;
+ const {zip,names}=exportAllBins(updated,defaults);
+ const result=spawnSync("python3",["-c",`import io,sys,zipfile,base64
+archive=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()))
+for name in archive.namelist():
+ data=archive.read(name)
+ sys.stdout.write(name+"|"+base64.b64encode(data).decode("ascii")+"\\n")`],{input:Buffer.from(zip),encoding:"utf8"});
+ assert.equal(result.status,0,result.stderr);
+ const decoded=new Map(result.stdout.trim().split("\n").map(line=>{
+  const at=line.indexOf("|");return [line.slice(0,at),Buffer.from(line.slice(at+1),"base64")];
+ }));
+ assert.equal(names.length,updated.length);
+ updated.forEach((bin,index)=>{
+  const one=exportOneBin(updated,defaults,index);
+  assert.equal(one.name,names[index]);
+  assert.deepEqual(Buffer.from(one.data),decoded.get(one.name));
+  assert.equal(new DataView(one.data).getUint32(80,true)>0,true);
+ });
+ assert.throws(()=>exportOneBin(updated,defaults,-1),/bestaat niet/);
 });
