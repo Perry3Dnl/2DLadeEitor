@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {makeGrid,splitBin,mergeBins,physicalBin,defaults,validateLayout,validateSettings,findBoundaries,moveBoundary} from "../src/lib/layout.ts";
 import {createBinTriangles,binarySTL} from "../src/lib/stl.ts";
 import {previewBin} from "../src/lib/preview.ts";
+import {getCellCorners,moveCellCorner} from "../src/lib/corners.ts";
 test("grid covers drawer without overlap",()=>{const bins=makeGrid(600,400);assert.equal(bins.length,6);assert.equal(validateLayout(bins,defaults),null);assert.ok(Math.abs(bins.reduce((a,b)=>a+b.width*b.depth,0)-240000)<.2)});
 test("split and merge preserve coverage",()=>{const original=makeGrid(600,400,1,1);const s=splitBin(original,original[0].id,"vertical");assert.ok(s);assert.equal(validateLayout(s,defaults),null);const m=mergeBins(s,s[0].id,s[1].id);assert.ok(m);assert.equal(validateLayout(m,defaults),null)});
 test("physical dimensions account for clearance and gap",()=>{const b=makeGrid(600,400);const p=physicalBin(b[0],defaults);assert.equal(p.width,198.7);assert.equal(p.depth,198.7)});
@@ -175,4 +176,49 @@ test("visible guide segments only follow actual adjoining bin edges",()=>{
    assert.ok(left&&right,`misleading guide ${edge.id} ${segment.start}-${segment.end}`);
   }
  }
+});
+
+test("a selected cell shows four corners and its fixed outer corner cannot move",()=>{
+ const bins=makeGrid(600,400),corners=getCellCorners(bins,bins[0].id);
+ assert.deepEqual(corners.map(c=>c.name),["tl","tr","bl","br"]);
+ assert.equal(corners[0].verticalId,null);
+ assert.equal(corners[0].horizontalId,null);
+ assert.ok(corners[3].verticalId);
+ assert.ok(corners[3].horizontalId);
+ assert.equal(moveCellCorner(bins,bins[0].id,"tl",40,50,defaults),bins);
+});
+test("dragging a selected inner corner moves both connected axes and preserves full layout",()=>{
+ const bins=makeGrid(600,400);
+ const updated=moveCellCorner(bins,bins[0].id,"br",25,30,defaults);
+ assert.equal(validateLayout(updated,defaults),null);
+ assert.equal(updated.find(v=>v.id===bins[0].id).width,225);
+ assert.equal(updated.find(v=>v.id===bins[0].id).depth,230);
+ assert.equal(updated.find(v=>v.id===bins[1].id).x,225);
+ assert.equal(updated.find(v=>v.id===bins[3].id).y,230);
+ const before=physicalBin(bins[0],defaults),after=physicalBin(updated[0],defaults);
+ assert.equal(after.width-before.width,25);
+ assert.equal(after.depth-before.depth,30);
+});
+test("corners at T junctions resize only connected axes and never make broken bins",()=>{
+ const bins=[
+ {id:"A",x:0,y:0,width:200,depth:247.4},
+ {id:"B",x:200,y:0,width:259.3,depth:200},
+ {id:"C",x:459.3,y:0,width:140.7,depth:200},
+ {id:"D",x:0,y:247.4,width:200,depth:152.6},
+ {id:"E",x:200,y:200,width:125.4,depth:200},
+ {id:"F",x:325.4,y:200,width:274.6,depth:200}
+ ];
+ assert.equal(validateLayout(bins,defaults),null);
+ for(const b of bins)for(const corner of getCellCorners(bins,b.id)){
+  for(const [dx,dy] of [[20,35],[-20,-35],[999,999],[-999,-999]]){
+   const updated=moveCellCorner(bins,b.id,corner.name,dx,dy,defaults);
+   assert.equal(validateLayout(updated,defaults),null,b.id+" "+corner.name);
+   assert.equal(updated.length,bins.length);
+  }
+ }
+});
+test("corner drags reject NaN and retain original cell coordinates when locked",()=>{
+ const bins=makeGrid(600,400);
+ assert.equal(moveCellCorner(bins,bins[0].id,"br",NaN,5,defaults),bins);
+ assert.equal(moveCellCorner(bins,"missing","br",5,5,defaults),bins);
 });
